@@ -18,9 +18,9 @@ impl ScnReader {
     
     /// Open scn file as ScnFile using stream
     pub fn open_scn_file<T: Read + Seek>(mut stream: T) -> Result<ScnFile<T>, ScnError> {
-        let (entry_point, table) = Self::open_scn(&mut stream)?;
+        let (entry_point, binary_size, table) = Self::open_scn(&mut stream)?;
 
-        ScnFile::new(table, entry_point, stream)
+        ScnFile::new(table, entry_point, binary_size, stream)
     }
 
     pub fn open_mdf_file<T: Read + Seek>(mut stream: T) -> Result<ScnFile<Cursor<Vec<u8>>>, ScnError> {
@@ -42,13 +42,13 @@ impl ScnReader {
 
         let mut cursor = Cursor::new(buffer);
 
-        let (entry_point, table) = Self::open_scn(&mut cursor)?;
+        let (entry_point, binary_size, table) = Self::open_scn(&mut cursor)?;
 
-        ScnFile::new(table, entry_point, cursor)
+        ScnFile::new(table, entry_point, binary_size, cursor)
     }
 
-    /// Read entrypoint, scn table
-    pub fn open_scn<T: Read + Seek>(stream: &mut T) -> Result<(u64, ScnRefTable), ScnError> {
+    /// Read entrypoint, binary size, scn table
+    pub fn open_scn<T: Read + Seek>(stream: &mut T) -> Result<(u64, u64, ScnRefTable), ScnError> {
         let start = stream.seek(SeekFrom::Current(0))?;
 
         let signature = stream.read_u32::<LittleEndian>()?;
@@ -66,6 +66,9 @@ impl ScnReader {
         let resource_length_pos = stream.read_u32::<LittleEndian>()?;
         let resource_data_pos = stream.read_u32::<LittleEndian>()?;
         let entry_point = start + stream.read_u32::<LittleEndian>()? as u64;
+
+        // String data always come after binary end
+        let bin_size = strings_data_pos as u64 - entry_point;
 
         let mut strings = Vec::<String>::new();
         let mut resources = Vec::<Vec<u8>>::new();
@@ -179,7 +182,7 @@ impl ScnReader {
 
         let table = ScnRefTable::new(strings, resources, extra);
 
-        Ok((entry_point, table))
+        Ok((entry_point, bin_size, table))
     }
 
 }

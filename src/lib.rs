@@ -159,18 +159,21 @@ pub struct ScnFile<T: Read + Seek> {
 
     entry_point: u64,
 
+    binary_size: u64,
+
     stream: T
 
 }
 
 impl<T: Read + Seek> ScnFile<T> {
 
-    pub fn new(ref_table: ScnRefTable, entry_point: u64, mut stream: T) -> Result<Self, ScnError> {
+    pub fn new(ref_table: ScnRefTable, entry_point: u64, binary_size: u64, mut stream: T) -> Result<Self, ScnError> {
         stream.seek(SeekFrom::Start(entry_point as u64))?;
 
         Ok(Self {
             ref_table,
             entry_point,
+            binary_size,
             stream
         })
     }
@@ -183,12 +186,39 @@ impl<T: Read + Seek> ScnFile<T> {
         self.entry_point
     }
 
+    pub fn binary_size(&self) -> u64 {
+        self.binary_size
+    }
+
+    /// Returns read size, PsbValue tuple
     pub fn read_next_value(&mut self) -> Result<(u64, PsbValue), ScnError> {
         PsbValue::from_bytes(&mut self.stream)
     }
 
-    pub fn unwrap(self) -> (ScnRefTable, u64, T) {
-        (self.ref_table, self.entry_point, self.stream)
+    /// Returns read size, PsbValue list tuple
+    pub fn read_all_value(&mut self) -> Result<(u64, Vec<PsbValue>), ScnError> {
+        let mut total_read = 0;
+        let mut list = Vec::<PsbValue>::new();
+
+        while total_read <= self.binary_size {
+            match self.read_next_value() {
+                Ok((read, val)) => {
+                    list.push(val);
+                    total_read += read;
+                },
+    
+                Err(err) => {
+                    return Err(err)
+                }
+            }
+        }
+
+        Ok((total_read, list))
+    }
+
+    /// Unwrap as ScnRefTable, entry point, binary size, stream tuple
+    pub fn unwrap(self) -> (ScnRefTable, u64, u64, T) {
+        (self.ref_table, self.entry_point, self.binary_size, self.stream)
     }
 
 }
@@ -207,10 +237,8 @@ mod tests {
 
         let mut file = ScnReader::open_scn_file(BufReader::new(&mut file)).unwrap();
         
-        loop {
-            let (read, value) = file.read_next_value().unwrap();
+        let (read, list) = file.read_all_value().unwrap();
 
-            println!("next: {:?}", value);
-        }
+        println!("entries: {}", list.len());
     }
 }
