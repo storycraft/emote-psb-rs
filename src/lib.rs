@@ -14,9 +14,10 @@ pub mod reader;
 pub mod writer;
 
 use io::Seek;
+use psb::PsbValue;
 pub use reader::ScnReader;
 
-use std::{error::Error, io::{self, Read}};
+use std::{error::Error, io::{self, Read, SeekFrom}};
 
 /// scn file signature
 pub const SCN_SIGNATURE: u32 = 0x425350;
@@ -57,7 +58,8 @@ pub enum ScnErrorKind {
     UnknownHeaderVersion,
     InvalidIndex,
     InvalidPSBValue,
-    InvalidOffsetTable
+    InvalidOffsetTable,
+    Custom
 
 }
 
@@ -163,12 +165,14 @@ pub struct ScnFile<T: Read + Seek> {
 
 impl<T: Read + Seek> ScnFile<T> {
 
-    pub fn new(ref_table: ScnRefTable, entry_point: u64, stream: T) -> Self {
-        Self {
+    pub fn new(ref_table: ScnRefTable, entry_point: u64, mut stream: T) -> Result<Self, ScnError> {
+        stream.seek(SeekFrom::Start(entry_point as u64))?;
+
+        Ok(Self {
             ref_table,
             entry_point,
             stream
-        }
+        })
     }
 
     pub fn ref_table(&self) -> &ScnRefTable {
@@ -177,6 +181,10 @@ impl<T: Read + Seek> ScnFile<T> {
 
     pub fn entry_point(&self) -> u64 {
         self.entry_point
+    }
+
+    pub fn read_next_value(&mut self) -> Result<(u64, PsbValue), ScnError> {
+        PsbValue::from_bytes(&mut self.stream)
     }
 
     pub fn unwrap(self) -> (ScnRefTable, u64, T) {
@@ -189,20 +197,20 @@ impl<T: Read + Seek> ScnFile<T> {
 mod tests {
     use std::{fs::File, io::BufReader};
 
+    use byteorder::ReadBytesExt;
+
     use crate::reader::ScnReader;
 
     #[test]
     fn test() {
         let mut file = File::open("sample.ks.scn").unwrap();
 
-        let file = ScnReader::open_scn_file(BufReader::new(&mut file)).unwrap();
+        let mut file = ScnReader::open_scn_file(BufReader::new(&mut file)).unwrap();
         
-        let ref_table = file.ref_table();
+        loop {
+            let (read, value) = file.read_next_value().unwrap();
 
-        for i in 0..ref_table.strings_len() {
-            let string = &ref_table.strings()[i];
-
-            println!("[{}]={}", i, string);
+            println!("next: {:?}", value);
         }
     }
 }

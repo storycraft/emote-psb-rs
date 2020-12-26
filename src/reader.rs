@@ -10,7 +10,7 @@ use byteorder::{ReadBytesExt, LittleEndian};
 use encoding::{Encoding, all::UTF_8};
 use flate2::read::ZlibDecoder;
 
-use crate::{SCN_MDF_SIGNATURE, SCN_SIGNATURE, ScnError, ScnErrorKind, ScnFile, ScnRefTable, header::{MdfHeader, ScnHeader}, psb::{array::PsbIntArray, number::PsbNumber}};
+use crate::{SCN_MDF_SIGNATURE, SCN_SIGNATURE, ScnError, ScnErrorKind, ScnFile, ScnRefTable, header::{MdfHeader, ScnHeader}, psb::{PsbValue, collection::PsbIntArray, number::PsbNumber}};
 
 pub struct ScnReader;
 
@@ -20,7 +20,7 @@ impl ScnReader {
     pub fn open_scn_file<T: Read + Seek>(mut stream: T) -> Result<ScnFile<T>, ScnError> {
         let (entry_point, table) = Self::open_scn(&mut stream)?;
 
-        Ok(ScnFile::new(table, entry_point, stream))
+        ScnFile::new(table, entry_point, stream)
     }
 
     pub fn open_mdf_file<T: Read + Seek>(mut stream: T) -> Result<ScnFile<Cursor<Vec<u8>>>, ScnError> {
@@ -44,7 +44,7 @@ impl ScnReader {
 
         let (entry_point, table) = Self::open_scn(&mut cursor)?;
 
-        Ok(ScnFile::new(table, entry_point, cursor))
+        ScnFile::new(table, entry_point, cursor)
     }
 
     /// Read entrypoint, scn table
@@ -65,7 +65,7 @@ impl ScnReader {
         let resource_offset_pos = stream.read_u32::<LittleEndian>()?;
         let resource_length_pos = stream.read_u32::<LittleEndian>()?;
         let resource_data_pos = stream.read_u32::<LittleEndian>()?;
-        let entry_point = stream.read_u32::<LittleEndian>()?;
+        let entry_point = start + stream.read_u32::<LittleEndian>()? as u64;
 
         let mut strings = Vec::<String>::new();
         let mut resources = Vec::<Vec<u8>>::new();
@@ -82,10 +82,22 @@ impl ScnReader {
                 let extra_data_pos = stream.read_u32::<LittleEndian>()?;
 
                 stream.seek(SeekFrom::Start(start + extra_offset_pos as u64))?;
-                let (_, extra_offsets) = PsbIntArray::from_bytes(stream)?;
+                let (_, extra_offsets) = match PsbValue::from_bytes(stream)? {
+
+                    (read, PsbValue::IntArray(array)) => Ok((read, array)),
+        
+                    _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+        
+                }?;
         
                 stream.seek(SeekFrom::Start(start + extra_length_pos as u64))?;
-                let (_, extra_lengths) = PsbIntArray::from_bytes(stream)?;
+                let (_, extra_lengths) = match PsbValue::from_bytes(stream)? {
+
+                    (read, PsbValue::IntArray(array)) => Ok((read, array)),
+        
+                    _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+        
+                }?;
 
                 if extra_offsets.len() < extra_lengths.len() {
                     return Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None));
@@ -108,13 +120,31 @@ impl ScnReader {
         }
 
         stream.seek(SeekFrom::Start(start + strings_offset_pos as u64))?;
-        let (_, string_offsets) = PsbIntArray::from_bytes(stream)?;
+        let (_, string_offsets) = match PsbValue::from_bytes(stream)? {
+
+            (read, PsbValue::IntArray(array)) => Ok((read, array)),
+
+            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+
+        }?;
 
         stream.seek(SeekFrom::Start(start + resource_offset_pos as u64))?;
-        let (_, resource_offsets) = PsbIntArray::from_bytes(stream)?;
+        let (_, resource_offsets) = match PsbValue::from_bytes(stream)? {
+
+            (read, PsbValue::IntArray(array)) => Ok((read, array)),
+
+            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+
+        }?;
 
         stream.seek(SeekFrom::Start(start + resource_length_pos as u64))?;
-        let (_, resource_lengths) = PsbIntArray::from_bytes(stream)?;
+        let (_, resource_lengths) = match PsbValue::from_bytes(stream)? {
+
+            (read, PsbValue::IntArray(array)) => Ok((read, array)),
+
+            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+
+        }?;
 
         if resource_offsets.len() < resource_lengths.len() {
             return Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None));
@@ -149,7 +179,7 @@ impl ScnReader {
 
         let table = ScnRefTable::new(strings, resources, extra);
 
-        Ok((entry_point as u64, table))
+        Ok((entry_point, table))
     }
 
 }

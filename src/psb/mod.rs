@@ -4,83 +4,160 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-pub mod array;
+pub mod collection;
 pub mod number;
+pub mod resource;
+
+use std::io::Read;
+
+use collection::{PsbIntArray, PsbList, PsbMap};
+use number::PsbNumber;
+
+use crate::{ScnError, ScnErrorKind};
+use byteorder::ReadBytesExt;
+
+use self::resource::PsbResource;
 
 pub const PSB_TYPE_NONE: u8 = 0x00;
+
 pub const PSB_TYPE_NULL: u8 = 0x01;
+
 pub const PSB_TYPE_FALSE: u8 = 0x02;
 pub const PSB_TYPE_TRUE: u8 = 0x03;
-pub const PSB_TYPE_INTEGER: u8 = 0x04;
+
+/// 0 <= N <= 8
+pub const PSB_TYPE_INTEGER_N: u8 = 0x04;
 pub const PSB_TYPE_FLOAT0: u8 = 0x1d;
 pub const PSB_TYPE_FLOAT: u8 = 0x1e;
 pub const PSB_TYPE_DOUBLE: u8 = 0x1f;
 
-pub const PSB_TYPE_INTEGER_ARRAY: u8 = 0x0C;
+/// 1 <= N <= 8
+pub const PSB_TYPE_INTEGER_ARRAY_N: u8 = 0x0C;
 
+/// 1 <= N <= 4
+pub const PSB_TYPE_STRING: u8 = 0x14;
 
-#[repr(u8)]
-pub enum PsbTypeIdentifier {
+/// 1 <= N <= 4
+pub const PSB_TYPE_RESOURCE_N: u8 = 0x18;
 
-    None = 0x0,
-    Null = 0x1,
-    False = 0x2,
-    True = 0x3,
+pub const PSB_TYPE_LIST: u8 = 0x20;
+pub const PSB_TYPE_MAP: u8 = 0x21;
 
-    // int, long
-    NumberN0 = 0x4,
-    NumberN1 = 0x5,
-    NumberN2 = 0x6,
-    NumberN3 = 0x7,
-    NumberN4 = 0x8,
-    NumberN5 = 0x9,
-    NumberN6 = 0xA,
-    NumberN7 = 0xB,
-    NumberN8 = 0xC,
+/// 1 <= N <= 8
+pub const PSB_TYPE_EXTRA_N: u8 = 0x21;
 
-    // array N(NUMBER) is count mask
-    ArrayN1 = 0xD,
-    ArrayN2 = 0xE,
-    ArrayN3 = 0xF,
-    ArrayN4 = 0x10,
-    ArrayN5 = 0x11,
-    ArrayN6 = 0x12,
-    ArrayN7 = 0x13,
-    ArrayN8 = 0x14,
+pub const PSB_COMPILER_INTEGER: u8 = 0x80;
+pub const PSB_COMPILER_STRING: u8 = 0x81;
+pub const PSB_COMPILER_RESOURCE: u8 = 0x82;
+pub const PSB_COMPILER_DECIMAL: u8 = 0x83;
+pub const PSB_COMPILER_ARRAY: u8 = 0x84;
+pub const PSB_COMPILER_BOOL: u8 = 0x85;
+pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
-    // index of strings table
-    StringN1 = 0x15,
-    StringN2 = 0x16,
-    StringN3 = 0x17,
-    StringN4 = 0x18,
+#[derive(Debug)]
+pub enum PsbValue {
 
-    // resource of thunk
-    ResourceN1 = 0x19,
-    ResourceN2 = 0x1A,
-    ResourceN3 = 0x1B,
-    ResourceN4 = 0x1C,
+    None, Null,
+    Bool(bool),
+    Number(PsbNumber),
+    IntArray(PsbIntArray),
 
-    // fpu value
-    Float0 = 0x1D,
-    Float = 0x1E,
-    Double = 0x1F,
+    String(PsbResource),
 
-    // objects
-    List = 0x20, // object list
-    Objects = 0x21, // object dictionary
+    List(PsbList),
+    Map(PsbMap),
 
-    ExtraChunkN1 = 0x22,
-    ExtraChunkN2 = 0x23,
-    ExtraChunkN3 = 0x24,
-    ExtraChunkN4 = 0x25,
+    Resource(PsbResource),
+    ExtraResource(PsbResource),
 
-    // used by compiler,it's fake
-    Integer = 0x80,
-    String = 0x81,
-    Resource = 0x82,
-    Decimal = 0x83,
-    Array = 0x84,
-    Boolean = 0x85,
-    BTree = 0x86
+    CompilerNumber,
+    CompilerString,
+    CompilerResource,
+    CompilerDecimal,
+    CompilerArray,
+    CompilerBool,
+    CompilerBinaryTree
+
+}
+
+impl PsbValue {
+
+    pub fn from_bytes(stream: &mut impl Read) -> Result<(u64, PsbValue), ScnError> {
+        let value_type = stream.read_u8()?;
+
+        match value_type {
+            PSB_TYPE_NONE => Ok((1, PsbValue::None)),
+            PSB_TYPE_NULL => Ok((1, PsbValue::Null)),
+
+            PSB_TYPE_FALSE => Ok((1, PsbValue::Bool(false))),
+            PSB_TYPE_TRUE => Ok((1, PsbValue::Bool(true))),
+            
+            PSB_TYPE_DOUBLE => {
+                let (read, val) = PsbNumber::from_bytes(value_type, stream)?;
+                Ok((read + 1, PsbValue::Number(val)))
+            },
+
+            PSB_TYPE_FLOAT0 => {
+                let (read, val) = PsbNumber::from_bytes(value_type, stream)?;
+                Ok((read + 1, PsbValue::Number(val)))
+            },
+
+            PSB_TYPE_FLOAT => {
+                let (read, val) = PsbNumber::from_bytes(value_type, stream)?;
+                Ok((read + 1, PsbValue::Number(val)))
+            },
+
+            _ if value_type >= PSB_TYPE_INTEGER_N && value_type <= PSB_TYPE_INTEGER_N + 8 => {
+                let (read, number) = PsbNumber::from_bytes(value_type, stream)?;
+                Ok((read + 1, PsbValue::Number(number)))
+            },
+
+            _ if value_type > PSB_TYPE_INTEGER_ARRAY_N && value_type <= PSB_TYPE_INTEGER_ARRAY_N + 8 => {
+                let (read, array) = PsbIntArray::from_bytes(value_type - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
+                Ok((read + 1, PsbValue::IntArray(array)))
+            },
+
+            _ if value_type > PSB_TYPE_STRING && value_type <= PSB_TYPE_STRING + 4 => {
+                let (read, string) = PsbResource::from_bytes(value_type - PSB_TYPE_STRING, stream)?;
+
+                Ok((read + 1, PsbValue::String(string)))
+            },
+
+            PSB_TYPE_LIST => {
+                let (read, list) = PsbList::from_bytes(stream)?;
+
+                Ok((read + 1, PsbValue::List(list)))
+            },
+
+            PSB_TYPE_MAP => {
+                let (read, map) = PsbMap::from_bytes(stream)?;
+
+                Ok((read + 1, PsbValue::Map(map)))
+            },
+
+            _ if value_type > PSB_TYPE_RESOURCE_N && value_type <= PSB_TYPE_RESOURCE_N + 4 => {
+                let (read, map) = PsbResource::from_bytes(value_type - PSB_TYPE_RESOURCE_N, stream)?;
+
+                Ok((read + 1, PsbValue::Resource(map)))
+            },
+
+            _ if value_type > PSB_TYPE_EXTRA_N && value_type <= PSB_TYPE_EXTRA_N + 4 => {
+                let (read, map) = PsbResource::from_bytes(value_type - PSB_TYPE_EXTRA_N, stream)?;
+
+                Ok((read + 1, PsbValue::ExtraResource(map)))
+            },
+
+            PSB_COMPILER_INTEGER => Ok((1, PsbValue::CompilerNumber)),
+            PSB_COMPILER_STRING => Ok((1, PsbValue::CompilerString)),
+            PSB_COMPILER_RESOURCE => Ok((1, PsbValue::CompilerResource)),
+            PSB_COMPILER_ARRAY => Ok((1, PsbValue::CompilerArray)),
+            PSB_COMPILER_BOOL => Ok((1, PsbValue::CompilerBool)),
+            PSB_COMPILER_BINARY_TREE => Ok((1, PsbValue::CompilerBinaryTree)),
+
+            _ => {
+                Err(ScnError::new(ScnErrorKind::InvalidPSBValue, None))
+            }
+        }
+    } 
 
 }
