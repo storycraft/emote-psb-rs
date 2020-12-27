@@ -6,7 +6,9 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-pub mod psb;
+pub mod types;
+
+pub mod btree;
 
 pub mod header;
 
@@ -15,7 +17,7 @@ pub mod writer;
 
 use header::ScnHeader;
 use io::Seek;
-use psb::PsbValue;
+use types::PsbValue;
 pub use reader::ScnReader;
 
 use std::{error::Error, io::{self, Read, SeekFrom}};
@@ -229,7 +231,7 @@ impl<T: Read + Seek> ScnFile<T> {
 mod tests {
     use std::{fs::File, io::{BufReader, Cursor, Read}};
 
-    use crate::{ScnRefTable, psb::{PsbValue, collection::PsbList, number::PsbNumber}, reader::ScnReader};
+    use crate::{ScnRefTable, types::{PsbValue, collection::PsbList, number::PsbNumber}, reader::ScnReader};
 
     #[test]
     fn test() {
@@ -242,6 +244,9 @@ mod tests {
         let mut file = ScnReader::open_scn_file(Cursor::new(mem_buf)).unwrap();
         
         let (_, root) = file.read_root().unwrap();
+
+        // display(0, &root, file.ref_table());
+        return;
 
         match root {
 

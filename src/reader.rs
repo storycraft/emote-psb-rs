@@ -10,7 +10,7 @@ use byteorder::{ReadBytesExt, LittleEndian};
 use encoding::{Encoding, all::UTF_8};
 use flate2::read::ZlibDecoder;
 
-use crate::{SCN_MDF_SIGNATURE, SCN_SIGNATURE, ScnError, ScnErrorKind, ScnFile, ScnRefTable, header::{MdfHeader, ScnHeader}, psb::PsbValue};
+use crate::{SCN_MDF_SIGNATURE, SCN_SIGNATURE, ScnError, ScnErrorKind, ScnFile, ScnRefTable, header::{MdfHeader, ScnHeader}, types::PsbValue};
 
 pub struct ScnReader;
 
@@ -58,7 +58,6 @@ impl ScnReader {
 
         let (_, header) = ScnHeader::from_bytes(stream)?;
 
-        // Header(including offsets) size
         let _ = stream.read_u32::<LittleEndian>()?;
 
         // Name offset pos
@@ -123,111 +122,118 @@ impl ScnReader {
             _header_checksum = None;
         }
 
-        stream.seek(SeekFrom::Start(start + name_offset_pos as u64))?;
-        let (_, charsets) = match PsbValue::from_bytes(stream)? {
-
-            (read, PsbValue::IntArray(array)) => Ok((read, array)),
-
-            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
-
-        }?;
-        let (_, name_datas) = match PsbValue::from_bytes(stream)? {
-
-            (read, PsbValue::IntArray(array)) => Ok((read, array)),
-
-            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
-
-        }?;
-        let (_, name_indexes) = match PsbValue::from_bytes(stream)? {
-
-            (read, PsbValue::IntArray(array)) => Ok((read, array)),
-
-            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
-
-        }?;
-
-        stream.seek(SeekFrom::Start(start + strings_offset_pos as u64))?;
-        let (_, string_offsets) = match PsbValue::from_bytes(stream)? {
-
-            (read, PsbValue::IntArray(array)) => Ok((read, array)),
-
-            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
-
-        }?;
-
-        stream.seek(SeekFrom::Start(start + resource_offset_pos as u64))?;
-        let (_, resource_offsets) = match PsbValue::from_bytes(stream)? {
-
-            (read, PsbValue::IntArray(array)) => Ok((read, array)),
-
-            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
-
-        }?;
-
-        stream.seek(SeekFrom::Start(start + resource_length_pos as u64))?;
-        let (_, resource_lengths) = match PsbValue::from_bytes(stream)? {
-
-            (read, PsbValue::IntArray(array)) => Ok((read, array)),
-
-            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
-
-        }?;
-
-        if resource_offsets.len() < resource_lengths.len() {
-            return Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None));
-        }
-
         // Names
-        let charsets = charsets.unwrap();
-        let name_datas = name_datas.unwrap();
-        let name_indexes = name_indexes.unwrap();
-        for index in name_indexes {
-            let mut buffer = Vec::<u8>::new();
-            
-            let mut chr = name_datas[index as usize];
+        {
+            stream.seek(SeekFrom::Start(start + name_offset_pos as u64))?;
+            let (_, charsets) = match PsbValue::from_bytes(stream)? {
+    
+                (read, PsbValue::IntArray(array)) => Ok((read, array)),
+    
+                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+    
+            }?;
+            let (_, name_tree) = match PsbValue::from_bytes(stream)? {
+    
+                (read, PsbValue::IntArray(array)) => Ok((read, array)),
+    
+                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+    
+            }?;
+            let (_, name_indexes) = match PsbValue::from_bytes(stream)? {
+    
+                (read, PsbValue::IntArray(array)) => Ok((read, array)),
+    
+                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+    
+            }?;
 
-            while chr != 0 {
-                let code = name_datas[chr as usize];
+            let charsets = charsets.unwrap();
+            let name_tree = name_tree.unwrap();
+            let name_indexes = name_indexes.unwrap();
 
-                let decoded = chr - charsets[code as usize];
-
-                chr = code;
-
-                buffer.push(decoded as u8);
+            for index in name_indexes {
+                let mut buffer = Vec::<u8>::new();
+                
+                let mut chr = name_tree[index as usize];
+    
+                while chr != 0 {
+                    let code = name_tree[chr as usize];
+    
+                    let decoded = chr - charsets[code as usize];
+                    
+                    chr = code;
+    
+                    buffer.push(decoded as u8);
+                }
+    
+                buffer.reverse();
+                let name = UTF_8.decode(&buffer, encoding::DecoderTrap::Replace).unwrap();
+    
+                names.push(name);
             }
-
-            buffer.reverse();
-            let name = UTF_8.decode(&buffer, encoding::DecoderTrap::Replace).unwrap();
-
-            names.push(name);
         }
 
-
+    
         // Strings
-        let mut reader = BufReader::new(stream.by_ref());
-        let string_offsets = string_offsets.unwrap();
-        for offset in string_offsets {
-            let mut buffer = Vec::new();
+        {
+            stream.seek(SeekFrom::Start(start + strings_offset_pos as u64))?;
+            let (_, string_offsets) = match PsbValue::from_bytes(stream)? {
+    
+                (read, PsbValue::IntArray(array)) => Ok((read, array)),
+    
+                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+    
+            }?;
 
-            reader.seek(SeekFrom::Start(start + strings_data_pos as u64 + offset))?;
-            reader.read_until(0x00, &mut buffer)?;
-
-            // Decode excluding nul
-            let string = UTF_8.decode(&buffer[..buffer.len() - 1], encoding::DecoderTrap::Replace).unwrap();
-
-            strings.push(string);
+            let mut reader = BufReader::new(stream.by_ref());
+            let string_offsets = string_offsets.unwrap();
+            for offset in string_offsets {
+                let mut buffer = Vec::new();
+    
+                reader.seek(SeekFrom::Start(start + strings_data_pos as u64 + offset))?;
+                reader.read_until(0x00, &mut buffer)?;
+    
+                // Decode excluding nul
+                let string = UTF_8.decode(&buffer[..buffer.len() - 1], encoding::DecoderTrap::Replace).unwrap();
+    
+                strings.push(string);
+            }
         }
 
         // Resources
-        let resource_offsets = resource_offsets.unwrap();
-        let resource_lengths = resource_lengths.unwrap();
-        for i in 0..resource_offsets.len() {
-            let mut buffer = Vec::new();
+        {
+            stream.seek(SeekFrom::Start(start + resource_offset_pos as u64))?;
+            let (_, resource_offsets) = match PsbValue::from_bytes(stream)? {
+    
+                (read, PsbValue::IntArray(array)) => Ok((read, array)),
+    
+                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+    
+            }?;
+    
+            stream.seek(SeekFrom::Start(start + resource_length_pos as u64))?;
+            let (_, resource_lengths) = match PsbValue::from_bytes(stream)? {
+    
+                (read, PsbValue::IntArray(array)) => Ok((read, array)),
+    
+                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+    
+            }?;
+    
+            if resource_offsets.len() < resource_lengths.len() {
+                return Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None));
+            }
 
-            stream.seek(SeekFrom::Start(start + resource_data_pos as u64 + resource_offsets[i]))?;
-            stream.take(resource_lengths[i] as u64).read_to_end(&mut buffer)?;
-
-            resources.push(buffer);
+            let resource_offsets = resource_offsets.unwrap();
+            let resource_lengths = resource_lengths.unwrap();
+            for i in 0..resource_offsets.len() {
+                let mut buffer = Vec::new();
+    
+                stream.seek(SeekFrom::Start(start + resource_data_pos as u64 + resource_offsets[i]))?;
+                stream.take(resource_lengths[i] as u64).read_to_end(&mut buffer)?;
+    
+                resources.push(buffer);
+            }
         }
 
         let table = ScnRefTable::new(names, strings, resources, extra);

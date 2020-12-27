@@ -1,5 +1,5 @@
 [package]
-name = "scn-emote"
+name = "emote-psb"
 version = "0.1.0"
 authors = ["storycraft <storycraft@pancake.sh>"]
 edition = "2018"
