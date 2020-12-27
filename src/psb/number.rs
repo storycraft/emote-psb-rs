@@ -12,7 +12,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use super::{PSB_TYPE_DOUBLE, PSB_TYPE_FLOAT, PSB_TYPE_INTEGER_N, PSB_TYPE_FLOAT0};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PsbNumber {
 
     Integer(u64),

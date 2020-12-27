@@ -4,15 +4,15 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-use std::{collections::HashMap, io::{Read, Seek, SeekFrom, Write}, ops::Index, slice::Iter};
+use std::{collections::{HashMap, hash_map}, io::{Read, Seek, SeekFrom, Write}, iter::Zip, ops::Index, slice::Iter};
 
-use crate::{ScnError, ScnErrorKind, ScnRefTable};
+use crate::ScnError;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
 use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue, number::PsbNumber};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PsbIntArray {
 
     vec: Vec<u64>
@@ -33,6 +33,14 @@ impl PsbIntArray {
 
     pub fn iter(&self) -> Iter<'_, u64> {
         self.vec.iter()
+    }
+
+    pub fn vec(&self) -> &Vec<u64> {
+        &self.vec
+    }
+
+    pub fn vec_mut(&mut self) -> &mut Vec<u64> {
+        &mut self.vec
     }
 
     pub fn unwrap(self) -> Vec<u64> {
@@ -93,122 +101,140 @@ impl Index<usize> for PsbIntArray {
 #[derive(Debug)]
 pub struct PsbList {
 
-    ref_offsets: PsbIntArray
+    values: Vec<PsbValue>
 
 }
 
 impl PsbList {
 
-    pub fn new(ref_offsets: PsbIntArray) -> Self {
+    pub fn new(values: Vec<PsbValue>) -> Self {
         Self {
-            ref_offsets
+            values
         }
+    }
+
+    pub fn values(&self) -> &Vec<PsbValue> {
+        &self.values
     }
 
     pub fn len(&self) -> usize {
-        self.ref_offsets.len()
+        self.values.len()
     }
 
-    pub fn unwrap(self) -> PsbIntArray {
-        self.ref_offsets
+    pub fn iter(&self) -> Iter<'_, PsbValue> {
+        self.values.iter()
     }
 
-    pub fn from_bytes(stream: &mut impl Read) -> Result<(u64, PsbList), ScnError> {
-        let (offsets_read, offsets) = PsbIntArray::from_bytes(stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
-        
-        Ok((offsets_read + 1, Self::new(offsets)))
+    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbList), ScnError> {
+        let (offsets_read, ref_offsets) = PsbIntArray::from_bytes(stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
+
+        if ref_offsets.len() < 1 {
+            return Ok((offsets_read + 1, Self::new(Vec::new())));
+        }
+
+        let max_offset = ref_offsets.iter().max().unwrap();
+
+        let mut values = Vec::<PsbValue>::with_capacity(ref_offsets.len());
+
+        let start = stream.seek(SeekFrom::Current(0))?;
+        let mut total_read = 0_u64;
+
+        for offset in ref_offsets.iter() {
+            stream.seek(SeekFrom::Start(start + *offset))?;
+            let (read, val) = PsbValue::from_bytes(stream)?;
+
+            values.push(val);
+
+            if *max_offset == *offset {
+                total_read = read + *offset;
+            }
+        }
+
+        stream.seek(SeekFrom::Start(start + total_read))?;
+
+        Ok((offsets_read + 1 + total_read, Self::new(values)))
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
-        stream.write_u8(self.ref_offsets.n())?;
-        let written = self.ref_offsets.write_bytes(stream)?;
 
-        Ok(1 + written)
-    }
+        todo!();
 
-    pub fn load_from_stream<T: Read + Seek>(&self, stream: &mut T) -> Result<Vec<PsbValue>, ScnError> {
-        let mut list = Vec::<PsbValue>::new();
-
-        let start = stream.seek(SeekFrom::Current(0))?;
-
-        for offset in self.ref_offsets.iter() {
-            stream.seek(SeekFrom::Start(*offset))?;
-            let (_, val) = PsbValue::from_bytes(stream)?;
-
-            list.push(val);
-        }
-
-        stream.seek(SeekFrom::Start(start))?;
-
-        Ok(list)
+        Ok(1)
     }
 
 }
 
 #[derive(Debug)]
-pub struct PsbMap {
+pub struct PsbObject {
 
-    name_refs: PsbIntArray,
-    ref_offsets: PsbIntArray
+    // String ref, PsbValue HashMap
+    map: HashMap<u64, PsbValue>
 
 }
 
-impl PsbMap {
+impl PsbObject {
 
     pub fn new(
-        name_refs: PsbIntArray,
-        ref_offsets: PsbIntArray
+        map: HashMap<u64, PsbValue>
     ) -> Self {
         Self {
-            name_refs,
-            ref_offsets
+            map
         }
     }
 
     pub fn len(&self) -> usize {
-        self.name_refs.len()
+        self.map.len()
     }
 
-    pub fn from_bytes(stream: &mut impl Read) -> Result<(u64, PsbMap), ScnError> {
+    pub fn get_value(&self, string_ref: u64) -> Option<&PsbValue> {
+        self.map.get(&string_ref)
+    }
+
+    pub fn map(&self) -> &HashMap<u64, PsbValue> {
+        &self.map
+    }
+
+    pub fn iter(&self) -> hash_map::Iter<'_, u64, PsbValue>{
+        self.map.iter()
+    }
+
+    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbObject), ScnError> {
         let (names_read, name_refs) = PsbIntArray::from_bytes(stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
         let (offsets_read, ref_offsets) = PsbIntArray::from_bytes(stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
 
-        Ok((names_read + offsets_read + 2, Self::new(name_refs, ref_offsets)))
+        if name_refs.len() < 1 {
+            return Ok((names_read + offsets_read + 2, Self::new(HashMap::new())));
+        }
+
+        let max_offset = ref_offsets.iter().max().unwrap();
+
+        let mut map = HashMap::<u64, PsbValue>::with_capacity(name_refs.len());
+
+        let start = stream.seek(SeekFrom::Current(0))?;
+        let mut total_read = 0_u64;
+
+        for (name_ref, offset) in name_refs.iter().zip(ref_offsets.iter()) {
+            stream.seek(SeekFrom::Start(start + *offset))?;
+            let (read, val) = PsbValue::from_bytes(stream)?;
+           
+            map.insert(*name_ref, val);
+
+            if *max_offset == *offset {
+                total_read = read + *offset;
+            }
+        }
+
+        stream.seek(SeekFrom::Start(start + total_read))?;
+
+        Ok((names_read + offsets_read + 2 + total_read, Self::new(map)))
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
         let mut written = 0_u64;
 
-        stream.write_u8(self.name_refs.n())?;
-        written += self.name_refs.write_bytes(stream)?;
-
-        stream.write_u8(self.ref_offsets.n())?;
-        written += self.ref_offsets.write_bytes(stream)?;
+        todo!();
 
         Ok(written + 2)
-    }
-
-    pub fn load_from_stream<T: Read + Seek>(&self, ref_table: &ScnRefTable, stream: &mut T) -> Result<HashMap<String, PsbValue>, ScnError> {
-        let mut map = HashMap::<String, PsbValue>::new();
-
-        let start = stream.seek(SeekFrom::Current(0))?;
-
-        for i in 0..self.name_refs.len() {
-            stream.seek(SeekFrom::Start(self.ref_offsets[i]))?;
-            let (_, val) = PsbValue::from_bytes(stream)?;
-
-            let string = ref_table.get_string(self.name_refs[i] as usize);
-
-            if string.is_none() {
-                return Err(ScnError::new(ScnErrorKind::InvalidPSBValue, None));
-            }
-
-            map.insert(string.unwrap().clone(), val);
-        }
-
-        stream.seek(SeekFrom::Start(start))?;
-
-        Ok(map)
     }
 
 }

@@ -6,17 +6,17 @@
 
 pub mod collection;
 pub mod number;
-pub mod resource;
+pub mod reference;
 
-use std::io::Read;
+use std::io::{Read, Seek};
 
-use collection::{PsbIntArray, PsbList, PsbMap};
+use collection::{PsbIntArray, PsbList, PsbObject};
 use number::PsbNumber;
 
 use crate::{ScnError, ScnErrorKind};
 use byteorder::ReadBytesExt;
 
-use self::resource::PsbResource;
+use self::reference::PsbReference;
 
 pub const PSB_TYPE_NONE: u8 = 0x00;
 
@@ -41,7 +41,7 @@ pub const PSB_TYPE_STRING: u8 = 0x14;
 pub const PSB_TYPE_RESOURCE_N: u8 = 0x18;
 
 pub const PSB_TYPE_LIST: u8 = 0x20;
-pub const PSB_TYPE_MAP: u8 = 0x21;
+pub const PSB_TYPE_OBJECT: u8 = 0x21;
 
 /// 1 <= N <= 8
 pub const PSB_TYPE_EXTRA_N: u8 = 0x21;
@@ -62,13 +62,13 @@ pub enum PsbValue {
     Number(PsbNumber),
     IntArray(PsbIntArray),
 
-    String(PsbResource),
+    String(PsbReference),
 
     List(PsbList),
-    Map(PsbMap),
+    Object(PsbObject),
 
-    Resource(PsbResource),
-    ExtraResource(PsbResource),
+    Resource(PsbReference),
+    ExtraResource(PsbReference),
 
     CompilerNumber,
     CompilerString,
@@ -82,7 +82,7 @@ pub enum PsbValue {
 
 impl PsbValue {
 
-    pub fn from_bytes(stream: &mut impl Read) -> Result<(u64, PsbValue), ScnError> {
+    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbValue), ScnError> {
         let value_type = stream.read_u8()?;
 
         match value_type {
@@ -118,7 +118,7 @@ impl PsbValue {
             },
 
             _ if value_type > PSB_TYPE_STRING && value_type <= PSB_TYPE_STRING + 4 => {
-                let (read, string) = PsbResource::from_bytes(value_type - PSB_TYPE_STRING, stream)?;
+                let (read, string) = PsbReference::from_bytes(value_type - PSB_TYPE_STRING, stream)?;
 
                 Ok((read + 1, PsbValue::String(string)))
             },
@@ -129,20 +129,20 @@ impl PsbValue {
                 Ok((read + 1, PsbValue::List(list)))
             },
 
-            PSB_TYPE_MAP => {
-                let (read, map) = PsbMap::from_bytes(stream)?;
+            PSB_TYPE_OBJECT => {
+                let (read, map) = PsbObject::from_bytes(stream)?;
 
-                Ok((read + 1, PsbValue::Map(map)))
+                Ok((read + 1, PsbValue::Object(map)))
             },
 
             _ if value_type > PSB_TYPE_RESOURCE_N && value_type <= PSB_TYPE_RESOURCE_N + 4 => {
-                let (read, map) = PsbResource::from_bytes(value_type - PSB_TYPE_RESOURCE_N, stream)?;
+                let (read, map) = PsbReference::from_bytes(value_type - PSB_TYPE_RESOURCE_N, stream)?;
 
                 Ok((read + 1, PsbValue::Resource(map)))
             },
 
             _ if value_type > PSB_TYPE_EXTRA_N && value_type <= PSB_TYPE_EXTRA_N + 4 => {
-                let (read, map) = PsbResource::from_bytes(value_type - PSB_TYPE_EXTRA_N, stream)?;
+                let (read, map) = PsbReference::from_bytes(value_type - PSB_TYPE_EXTRA_N, stream)?;
 
                 Ok((read + 1, PsbValue::ExtraResource(map)))
             },
@@ -155,6 +155,7 @@ impl PsbValue {
             PSB_COMPILER_BINARY_TREE => Ok((1, PsbValue::CompilerBinaryTree)),
 
             _ => {
+                println!("Attempted to read {}", value_type);
                 Err(ScnError::new(ScnErrorKind::InvalidPSBValue, None))
             }
         }

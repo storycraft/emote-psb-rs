@@ -159,21 +159,16 @@ pub struct ScnFile<T: Read + Seek> {
 
     entry_point: u64,
 
-    binary_size: u64,
-
     stream: T
 
 }
 
 impl<T: Read + Seek> ScnFile<T> {
 
-    pub fn new(ref_table: ScnRefTable, entry_point: u64, binary_size: u64, mut stream: T) -> Result<Self, ScnError> {
-        stream.seek(SeekFrom::Start(entry_point as u64))?;
-
+    pub fn new(ref_table: ScnRefTable, entry_point: u64, mut stream: T) -> Result<Self, ScnError> {
         Ok(Self {
             ref_table,
             entry_point,
-            binary_size,
             stream
         })
     }
@@ -186,59 +181,189 @@ impl<T: Read + Seek> ScnFile<T> {
         self.entry_point
     }
 
-    pub fn binary_size(&self) -> u64 {
-        self.binary_size
-    }
-
-    /// Returns read size, PsbValue tuple
-    pub fn read_next_value(&mut self) -> Result<(u64, PsbValue), ScnError> {
+    /// Read root tree.
+    /// Returns read size, PsbValue tuple.
+    pub fn read_root(&mut self) -> Result<(u64, PsbValue), ScnError> {
+        self.stream.seek(SeekFrom::Start(self.entry_point as u64))?;
         PsbValue::from_bytes(&mut self.stream)
     }
 
-    /// Returns read size, PsbValue list tuple
-    pub fn read_all_value(&mut self) -> Result<(u64, Vec<PsbValue>), ScnError> {
-        let mut total_read = 0;
-        let mut list = Vec::<PsbValue>::new();
-
-        while total_read <= self.binary_size {
-            match self.read_next_value() {
-                Ok((read, val)) => {
-                    list.push(val);
-                    total_read += read;
-                },
-    
-                Err(err) => {
-                    return Err(err)
-                }
-            }
-        }
-
-        Ok((total_read, list))
-    }
-
-    /// Unwrap as ScnRefTable, entry point, binary size, stream tuple
-    pub fn unwrap(self) -> (ScnRefTable, u64, u64, T) {
-        (self.ref_table, self.entry_point, self.binary_size, self.stream)
+    /// Unwrap as ScnRefTable, entry point, stream tuple
+    pub fn unwrap(self) -> (ScnRefTable, u64, T) {
+        (self.ref_table, self.entry_point, self.stream)
     }
 
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::BufReader};
+    use std::{fs::File, io::{BufReader, Cursor, Read}};
 
-    use byteorder::ReadBytesExt;
-
-    use crate::reader::ScnReader;
+    use crate::{ScnRefTable, psb::{PsbValue, collection::PsbList, number::PsbNumber}, reader::ScnReader};
 
     #[test]
     fn test() {
-        let mut file = File::open("sample.ks.scn").unwrap();
+        let mut file = File::open("sample3.txt.scn").unwrap();
 
-        let mut file = ScnReader::open_scn_file(BufReader::new(&mut file)).unwrap();
+        let mut mem_buf = Vec::new();
+
+        BufReader::new(&mut file).read_to_end(&mut mem_buf).unwrap();
+
+        let mut file = ScnReader::open_scn_file(Cursor::new(mem_buf)).unwrap();
         
-        let (read, list) = file.read_all_value().unwrap();
+        let (_, root) = file.read_root().unwrap();
 
-        println!("entries: {}", list.len());
+        match root {
+
+            PsbValue::Object(root) => {
+                let scn_root: &PsbList = root.iter().find_map(|item| match item.1 {
+                        PsbValue::List(list) if list.len() > 0 => {
+                            Some(list)
+                        },
+                        
+                        _ => {
+                            None
+                        }
+                }).expect("Cannot find root scn!!");
+                
+                let scn = scn_root.iter().last().unwrap();
+
+                match scn {
+
+                    PsbValue::Object(scn) => {
+                        let list = scn.iter().find_map(|item| match item.1 {
+                            PsbValue::List(list) if list.len() > 0 => {
+                                Some(list)
+                            },
+                            
+                            _ => {
+                                None
+                            }
+                        }).expect("Cannot find scn!!");
+
+                        // println!("entry: {:?}", entry);
+
+                        for item in list.iter() {
+                            match item {
+
+                                PsbValue::List(obj) => {
+                                    let (character, text) = (&obj.values()[0], &obj.values()[2]);
+
+                                    let character = match character {
+
+                                        PsbValue::String(string_ref) => {
+                                            file.ref_table().get_string(string_ref.ref_index() as usize).unwrap()
+                                        },
+
+                                        _ => "None"
+                                    };
+
+                                    let text = match text {
+
+                                        PsbValue::String(string_ref) => {
+                                            file.ref_table().get_string(string_ref.ref_index() as usize).unwrap()
+                                        },
+
+                                        _ => "None"
+                                    };
+
+                                    println!("{:?}: {:?}", character, text);
+                                },
+
+                                found => {
+                                    println!("{:?}", found)
+                                }
+                            }
+                        }
+
+                    },
+
+                    _ => {
+                        panic!("This cannot be happen!3")
+                    }
+                }
+            }
+
+            _ => {
+                panic!("This cannot be happen!1")
+            }
+        }
+
+        // println!("root: {:?}", root);
+        
+        // display(0, &root, file.ref_table());
+    }
+
+    fn display(depth: u16, value: &PsbValue, ref_table: &ScnRefTable) {
+        match value {
+
+            PsbValue::None => print!("None"),
+
+            PsbValue::Null => print!("null"),
+
+            PsbValue::Bool(flag) => print!("{}", flag),
+
+            PsbValue::Number(number) => {
+                match number {
+                    PsbNumber::Integer(number) => {
+                        print!("{}", number)
+                    },
+
+                    PsbNumber::Double(number) => {
+                        print!("{}", number)
+                    },
+
+                    PsbNumber::Float(number) => {
+                        print!("{}", number)
+                    }
+                }
+            },
+
+            PsbValue::IntArray(array) => {
+                print!("[ ");
+                for value in array.iter() {
+                    print!("{}, ", value);
+                }
+                print!(" ]");
+            },
+
+            PsbValue::String(res) => print!("\"{}\"", ref_table.get_string(res.ref_index() as usize).unwrap()),
+
+            PsbValue::List(list) => {
+                println!("[",);
+                for value in list.iter() {
+                    print!("{}", " ".repeat(depth as usize * 2));
+                    display(depth + 1, value, ref_table);
+                    println!(", ");
+                }
+                print!("{}]", " ".repeat(depth as usize * 2));
+            }
+
+            PsbValue::Object(map) => {
+                println!("{{");
+                for (name_ref, value) in map.iter() {
+                    let key = ref_table.get_string(*name_ref as usize).unwrap();
+                    
+                    print!("{}\"{}\": ", " ".repeat(depth as usize * 2), key);
+                    display(depth + 1, value, ref_table);
+                    println!(",");
+                }
+
+                print!("{}}}", " ".repeat(depth as usize * 2));
+            }
+
+            PsbValue::Resource(res) => {}
+
+            PsbValue::ExtraResource(res) => {}
+
+            PsbValue::CompilerNumber => {}
+
+            PsbValue::CompilerString => {}
+            PsbValue::CompilerResource => {}
+            PsbValue::CompilerDecimal => {}
+            PsbValue::CompilerArray => {}
+            PsbValue::CompilerBool => {}
+            PsbValue::CompilerBinaryTree => {}
+        }
     }
 }

@@ -10,14 +10,14 @@ use crate::ScnError;
 
 use super::number::PsbNumber;
 
-#[derive(Debug)]
-pub struct PsbResource {
+#[derive(Debug, Clone)]
+pub struct PsbReference {
 
     ref_index: u64
 
 }
 
-impl PsbResource {
+impl PsbReference {
 
     pub fn new(ref_index: u64) -> Self {
         Self {
