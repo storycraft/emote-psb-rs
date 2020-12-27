@@ -10,7 +10,7 @@ use crate::ScnError;
 
 use super::number::PsbNumber;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PsbReference {
 
     ref_index: u64
@@ -31,6 +31,10 @@ impl PsbReference {
 
     pub fn set_index(&mut self, ref_index: u64) {
         self.ref_index = ref_index;
+    }
+
+    pub fn get_n(&self) -> u8 {
+        PsbNumber::get_n(self.ref_index)
     }
 
     pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, Self), ScnError> {

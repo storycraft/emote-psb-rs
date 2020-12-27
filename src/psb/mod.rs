@@ -8,13 +8,13 @@ pub mod collection;
 pub mod number;
 pub mod reference;
 
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
 
 use collection::{PsbIntArray, PsbList, PsbObject};
 use number::PsbNumber;
 
 use crate::{ScnError, ScnErrorKind};
-use byteorder::ReadBytesExt;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 
 use self::reference::PsbReference;
 
@@ -35,7 +35,7 @@ pub const PSB_TYPE_DOUBLE: u8 = 0x1f;
 pub const PSB_TYPE_INTEGER_ARRAY_N: u8 = 0x0C;
 
 /// 1 <= N <= 4
-pub const PSB_TYPE_STRING: u8 = 0x14;
+pub const PSB_TYPE_STRING_N: u8 = 0x14;
 
 /// 1 <= N <= 4
 pub const PSB_TYPE_RESOURCE_N: u8 = 0x18;
@@ -54,7 +54,7 @@ pub const PSB_COMPILER_ARRAY: u8 = 0x84;
 pub const PSB_COMPILER_BOOL: u8 = 0x85;
 pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum PsbValue {
 
     None, Null,
@@ -117,8 +117,8 @@ impl PsbValue {
                 Ok((read + 1, PsbValue::IntArray(array)))
             },
 
-            _ if value_type > PSB_TYPE_STRING && value_type <= PSB_TYPE_STRING + 4 => {
-                let (read, string) = PsbReference::from_bytes(value_type - PSB_TYPE_STRING, stream)?;
+            _ if value_type > PSB_TYPE_STRING_N && value_type <= PSB_TYPE_STRING_N + 4 => {
+                let (read, string) = PsbReference::from_bytes(value_type - PSB_TYPE_STRING_N, stream)?;
 
                 Ok((read + 1, PsbValue::String(string)))
             },
@@ -159,6 +159,118 @@ impl PsbValue {
                 Err(ScnError::new(ScnErrorKind::InvalidPSBValue, None))
             }
         }
-    } 
+    }
+
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+        match &self {
+            PsbValue::None => {
+                stream.write_u8(PSB_TYPE_NONE)?;
+                Ok(1)
+            },
+            PsbValue::Null => {
+                stream.write_u8(PSB_TYPE_NULL)?;
+                Ok(1)
+            },
+            PsbValue::Bool(value) => {
+                if *value {
+                    stream.write_u8(PSB_TYPE_TRUE)?;
+                } else {
+                    stream.write_u8(PSB_TYPE_FALSE)?;
+                }
+
+                Ok(1)
+            },
+            PsbValue::Number(number) => {
+                match number {
+                    PsbNumber::Integer(integer) => {
+                        let n = PsbNumber::get_n(*integer);
+                        stream.write_u8(PSB_TYPE_INTEGER_N + n)?;
+                    },
+
+                    PsbNumber::Double(_) => {
+                        stream.write_u8(PSB_TYPE_DOUBLE)?;
+                    },
+
+                    PsbNumber::Float(float) => {
+                        if *float == 0_f32 {
+                            stream.write_u8(PSB_TYPE_FLOAT0)?;
+                        } else {
+                            stream.write_u8(PSB_TYPE_FLOAT)?;
+                        }
+                    }
+                }
+
+                Ok(1 + number.write_bytes(stream)?)
+            },
+
+            PsbValue::IntArray(array) => {
+                let len = array.len() as u64;
+                stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + PsbNumber::get_n(len))?;
+
+                Ok(1 + array.write_bytes(stream)?)
+            },
+
+            PsbValue::String(string) => {
+                let n = string.get_n();
+                stream.write_u8(PSB_TYPE_STRING_N + n)?;
+
+                Ok(1 + string.write_bytes(stream)?)
+            },
+
+            PsbValue::List(list) => {
+                stream.write_u8(PSB_TYPE_LIST)?;
+
+                Ok(1 + list.write_bytes(stream)?)
+            },
+
+            PsbValue::Object(object) => {
+                stream.write_u8(PSB_TYPE_OBJECT)?;
+
+                Ok(1 + object.write_bytes(stream)?)
+            },
+
+            PsbValue::Resource(res) => {
+                let n = res.get_n();
+                stream.write_u8(PSB_TYPE_EXTRA_N + n)?;
+
+                Ok(1 + res.write_bytes(stream)?)
+            },
+            PsbValue::ExtraResource(res) => {
+                let n = res.get_n();
+                stream.write_u8(PSB_TYPE_EXTRA_N + n)?;
+
+                Ok(1 + res.write_bytes(stream)?)
+            },
+
+            PsbValue::CompilerNumber => {
+                stream.write_u8(PSB_COMPILER_INTEGER)?;
+                Ok(1)
+            },
+            PsbValue::CompilerString => {
+                stream.write_u8(PSB_COMPILER_STRING)?;
+                Ok(1)
+            },
+            PsbValue::CompilerResource => {
+                stream.write_u8(PSB_COMPILER_RESOURCE)?;
+                Ok(1)
+            },
+            PsbValue::CompilerDecimal => {
+                stream.write_u8(PSB_COMPILER_DECIMAL)?;
+                Ok(1)
+            },
+            PsbValue::CompilerArray => {
+                stream.write_u8(PSB_COMPILER_ARRAY)?;
+                Ok(1)
+            },
+            PsbValue::CompilerBool => {
+                stream.write_u8(PSB_COMPILER_BOOL)?;
+                Ok(1)
+            },
+            PsbValue::CompilerBinaryTree => {
+                stream.write_u8(PSB_COMPILER_BINARY_TREE)?;
+                Ok(1)
+            },
+        }
+    }
 
 }

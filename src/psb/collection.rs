@@ -4,7 +4,7 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-use std::{collections::{HashMap, hash_map}, io::{Read, Seek, SeekFrom, Write}, iter::Zip, ops::Index, slice::Iter};
+use std::{collections::{HashMap, hash_map}, io::{Read, Seek, SeekFrom, Write}, ops::Index, slice::Iter};
 
 use crate::ScnError;
 
@@ -12,7 +12,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 
 use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue, number::PsbNumber};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PsbIntArray {
 
     vec: Vec<u64>
@@ -48,7 +48,7 @@ impl PsbIntArray {
     }
 
     /// Item byte size
-    pub fn n(&self) -> u8 {
+    pub fn get_item_n(&self) -> u8 {
         PsbNumber::get_n(self.vec.iter().max().unwrap().clone()).min(1)
     }
 
@@ -71,11 +71,15 @@ impl PsbIntArray {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
-        if self.vec.len() < 1 {
+        let len = self.vec.len() as u64;
+
+        let count_written = PsbNumber::Integer(len).write_bytes(stream)?;
+
+        if len < 1 {
             stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + 1)?;
             Ok(1)
         } else {
-            let n = self.n().min(1);
+            let n = self.get_item_n();
 
             stream.write_u8(n + PSB_TYPE_INTEGER_ARRAY_N)?;
 
@@ -83,7 +87,7 @@ impl PsbIntArray {
                 stream.write_all(&num.to_le_bytes()[..n as usize])?;
             }
 
-            Ok(1 + n as u64 * self.vec.len() as u64)
+            Ok(1 + count_written + n as u64 * self.vec.len() as u64)
         }
     }
 
@@ -98,7 +102,7 @@ impl Index<usize> for PsbIntArray {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PsbList {
 
     values: Vec<PsbValue>
@@ -156,15 +160,43 @@ impl PsbList {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+        let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
 
-        todo!();
+        let mut offsets = Vec::<u64>::new();
+        let mut data_buffer = Vec::<u8>::new();
 
-        Ok(1)
+        let mut total_data_written = 0_u64;
+
+        for value in &self.values {
+            let mut cached = false;
+            for (offset, cache_value) in &value_offset_cache {
+                if value == *cache_value {
+                    offsets.push(*offset);
+                    cached = true;
+                    break;
+                }
+            }
+
+            if !cached {
+                let value_written = value.write_bytes(&mut data_buffer)?;
+
+                total_data_written += value_written;
+    
+                value_offset_cache.insert(total_data_written, &value);
+                offsets.push(total_data_written);
+            }
+        }
+        
+        stream.write_u8(PsbNumber::get_n(offsets.len() as u64) + PSB_TYPE_INTEGER_ARRAY_N)?;
+        let offset_written = PsbIntArray::new(offsets).write_bytes(stream)?;
+        stream.write_all(&data_buffer)?;
+
+        Ok(1 + offset_written + total_data_written)
     }
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PsbObject {
 
     // String ref, PsbValue HashMap
@@ -230,11 +262,45 @@ impl PsbObject {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
-        let mut written = 0_u64;
+        let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
 
-        todo!();
+        let mut name_refs = Vec::<u64>::new();
+        let mut offsets = Vec::<u64>::new();
+        let mut data_buffer = Vec::<u8>::new();
 
-        Ok(written + 2)
+        let mut total_data_written = 0_u64;
+
+        for (name_ref, value) in &self.map {
+            name_refs.push(*name_ref);
+
+            let mut cached = false;
+            for (offset, cache_value) in &value_offset_cache {
+                if value == *cache_value {
+                    offsets.push(*offset);
+                    cached = true;
+                    break;
+                }
+            }
+
+            if !cached {
+                let value_written = value.write_bytes(&mut data_buffer)?;
+
+                total_data_written += value_written;
+    
+                value_offset_cache.insert(total_data_written, &value);
+                offsets.push(total_data_written);
+            }
+        }
+
+        stream.write_u8(PsbNumber::get_n(name_refs.len() as u64) + PSB_TYPE_INTEGER_ARRAY_N)?;
+        let names_written = PsbIntArray::new(name_refs).write_bytes(stream)?;
+
+        stream.write_u8(PsbNumber::get_n(offsets.len() as u64) + PSB_TYPE_INTEGER_ARRAY_N)?;
+        let offset_written = PsbIntArray::new(offsets).write_bytes(stream)?;
+
+        stream.write_all(&data_buffer)?;
+
+        Ok(2 + names_written + offset_written + total_data_written)
     }
 
 }
