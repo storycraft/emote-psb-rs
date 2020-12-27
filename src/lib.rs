@@ -13,6 +13,7 @@ pub mod header;
 pub mod reader;
 pub mod writer;
 
+use header::ScnHeader;
 use io::Seek;
 use psb::PsbValue;
 pub use reader::ScnReader;
@@ -74,6 +75,8 @@ impl From<io::Error> for ScnError {
 #[derive(Debug)]
 pub struct ScnRefTable {
 
+    names: Vec<String>,
+
     strings: Vec<String>,
 
     resources: Vec<Vec<u8>>,
@@ -84,10 +87,30 @@ pub struct ScnRefTable {
 
 impl ScnRefTable {
 
-    pub fn new(strings: Vec<String>, resources: Vec<Vec<u8>>, extra: Vec<Vec<u8>>) -> Self {
+    pub fn new(names: Vec<String>,strings: Vec<String>, resources: Vec<Vec<u8>>, extra: Vec<Vec<u8>>) -> Self {
         Self {
-            strings, resources, extra
+            names, strings, resources, extra
         }
+    }
+
+    pub fn names(&self) -> &Vec<String> {
+        &self.names
+    }
+
+    pub fn names_mut(&mut self) -> &mut Vec<String> {
+        &mut self.names
+    }
+
+    pub fn names_len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn get_name(&self, index: usize) -> Option<&String> {
+        self.names.get(index)
+    }
+
+    pub fn get_name_mut(&mut self, index: usize) -> Option<&mut String> {
+        self.names.get_mut(index)
     }
 
     pub fn strings(&self) -> &Vec<String> {
@@ -154,6 +177,8 @@ impl ScnRefTable {
 
 #[derive(Debug)]
 pub struct ScnFile<T: Read + Seek> {
+
+    header: ScnHeader,
     
     ref_table: ScnRefTable,
 
@@ -165,12 +190,17 @@ pub struct ScnFile<T: Read + Seek> {
 
 impl<T: Read + Seek> ScnFile<T> {
 
-    pub fn new(ref_table: ScnRefTable, entry_point: u64, mut stream: T) -> Result<Self, ScnError> {
+    pub fn new(header: ScnHeader, ref_table: ScnRefTable, entry_point: u64, mut stream: T) -> Result<Self, ScnError> {
         Ok(Self {
+            header,
             ref_table,
             entry_point,
             stream
         })
+    }
+
+    pub fn header(&self) -> &ScnHeader {
+        &self.header
     }
 
     pub fn ref_table(&self) -> &ScnRefTable {
@@ -188,9 +218,9 @@ impl<T: Read + Seek> ScnFile<T> {
         PsbValue::from_bytes(&mut self.stream)
     }
 
-    /// Unwrap as ScnRefTable, entry point, stream tuple
-    pub fn unwrap(self) -> (ScnRefTable, u64, T) {
-        (self.ref_table, self.entry_point, self.stream)
+    /// Unwrap as ScnHeader, ScnRefTable, entry point, stream tuple
+    pub fn unwrap(self) -> (ScnHeader, ScnRefTable, u64, T) {
+        (self.header, self.ref_table, self.entry_point, self.stream)
     }
 
 }
@@ -342,7 +372,7 @@ mod tests {
             PsbValue::Object(map) => {
                 println!("{{");
                 for (name_ref, value) in map.iter() {
-                    let key = ref_table.get_string(*name_ref as usize).unwrap();
+                    let key = ref_table.get_name(*name_ref as usize).unwrap();
                     
                     print!("{}\"{}\": ", " ".repeat(depth as usize * 2), key);
                     display(depth + 1, value, ref_table);

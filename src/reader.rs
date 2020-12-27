@@ -18,9 +18,9 @@ impl ScnReader {
     
     /// Open scn file as ScnFile using stream
     pub fn open_scn_file<T: Read + Seek>(mut stream: T) -> Result<ScnFile<T>, ScnError> {
-        let (entry_point, table) = Self::open_scn(&mut stream)?;
+        let (entry_point, header, table) = Self::open_scn(&mut stream)?;
 
-        ScnFile::new(table, entry_point, stream)
+        ScnFile::new(header, table, entry_point, stream)
     }
 
     pub fn open_mdf_file<T: Read + Seek>(mut stream: T) -> Result<ScnFile<Cursor<Vec<u8>>>, ScnError> {
@@ -42,14 +42,14 @@ impl ScnReader {
 
         let mut cursor = Cursor::new(buffer);
 
-        let (entry_point, table) = Self::open_scn(&mut cursor)?;
+        let (entry_point, header, table) = Self::open_scn(&mut cursor)?;
 
-        ScnFile::new(table, entry_point, cursor)
+        ScnFile::new(header, table, entry_point, cursor)
     }
 
-    /// Read entrypoint, scn table
-    pub fn open_scn<T: Read + Seek>(stream: &mut T) -> Result<(u64, ScnRefTable), ScnError> {
-        let start = stream.seek(SeekFrom::Current(0))?;
+    /// Read entrypoint, header, scn table
+    pub fn open_scn<T: Read + Seek>(stream: &mut T) -> Result<(u64, ScnHeader, ScnRefTable), ScnError> {
+        let start = stream.seek(SeekFrom::Current(0)).unwrap();
 
         let signature = stream.read_u32::<LittleEndian>()?;
         if signature != SCN_SIGNATURE {
@@ -58,11 +58,11 @@ impl ScnReader {
 
         let (_, header) = ScnHeader::from_bytes(stream)?;
 
-        // Unknown size
+        // Header(including offsets) size
         let _ = stream.read_u32::<LittleEndian>()?;
 
         // Name offset pos
-        let _ = stream.read_u32::<LittleEndian>()?;
+        let name_offset_pos = stream.read_u32::<LittleEndian>()?;
         let strings_offset_pos = stream.read_u32::<LittleEndian>()?;
         let strings_data_pos = stream.read_u32::<LittleEndian>()?;
         let resource_offset_pos = stream.read_u32::<LittleEndian>()?;
@@ -70,6 +70,7 @@ impl ScnReader {
         let resource_data_pos = stream.read_u32::<LittleEndian>()?;
         let entry_point = start + stream.read_u32::<LittleEndian>()? as u64;
 
+        let mut names = Vec::<String>::new();
         let mut strings = Vec::<String>::new();
         let mut resources = Vec::<Vec<u8>>::new();
         let mut extra = Vec::<Vec<u8>>::new();
@@ -122,6 +123,29 @@ impl ScnReader {
             _header_checksum = None;
         }
 
+        stream.seek(SeekFrom::Start(start + name_offset_pos as u64))?;
+        let (_, charsets) = match PsbValue::from_bytes(stream)? {
+
+            (read, PsbValue::IntArray(array)) => Ok((read, array)),
+
+            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+
+        }?;
+        let (_, name_datas) = match PsbValue::from_bytes(stream)? {
+
+            (read, PsbValue::IntArray(array)) => Ok((read, array)),
+
+            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+
+        }?;
+        let (_, name_indexes) = match PsbValue::from_bytes(stream)? {
+
+            (read, PsbValue::IntArray(array)) => Ok((read, array)),
+
+            _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+
+        }?;
+
         stream.seek(SeekFrom::Start(start + strings_offset_pos as u64))?;
         let (_, string_offsets) = match PsbValue::from_bytes(stream)? {
 
@@ -153,6 +177,32 @@ impl ScnReader {
             return Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None));
         }
 
+        // Names
+        let charsets = charsets.unwrap();
+        let name_datas = name_datas.unwrap();
+        let name_indexes = name_indexes.unwrap();
+        for index in name_indexes {
+            let mut buffer = Vec::<u8>::new();
+            
+            let mut chr = name_datas[index as usize];
+
+            while chr != 0 {
+                let code = name_datas[chr as usize];
+
+                let decoded = chr - charsets[code as usize];
+
+                chr = code;
+
+                buffer.push(decoded as u8);
+            }
+
+            buffer.reverse();
+            let name = UTF_8.decode(&buffer, encoding::DecoderTrap::Replace).unwrap();
+
+            names.push(name);
+        }
+
+
         // Strings
         let mut reader = BufReader::new(stream.by_ref());
         let string_offsets = string_offsets.unwrap();
@@ -180,9 +230,9 @@ impl ScnReader {
             resources.push(buffer);
         }
 
-        let table = ScnRefTable::new(strings, resources, extra);
+        let table = ScnRefTable::new(names, strings, resources, extra);
 
-        Ok((entry_point, table))
+        Ok((entry_point, header, table))
     }
 
 }

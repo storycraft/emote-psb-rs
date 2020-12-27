@@ -140,7 +140,7 @@ impl PsbList {
 
         let mut values = Vec::<PsbValue>::with_capacity(ref_offsets.len());
 
-        let start = stream.seek(SeekFrom::Current(0))?;
+        let start = stream.seek(SeekFrom::Current(0)).unwrap();
         let mut total_read = 0_u64;
 
         for offset in ref_offsets.iter() {
@@ -242,7 +242,7 @@ impl PsbObject {
 
         let mut map = HashMap::<u64, PsbValue>::with_capacity(name_refs.len());
 
-        let start = stream.seek(SeekFrom::Current(0))?;
+        let start = stream.seek(SeekFrom::Current(0)).unwrap();
         let mut total_read = 0_u64;
 
         for (name_ref, offset) in name_refs.iter().zip(ref_offsets.iter()) {
