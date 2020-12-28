@@ -40,8 +40,10 @@ impl<T: Write + Seek> ScnWriter<T> {
 
     /// Write file and finish stream
     pub fn finish(mut self) -> Result<(u64, T), ScnError> {
+        let file_start = self.stream.seek(SeekFrom::Current(0)).unwrap();
+
         self.stream.write_u32::<LittleEndian>(SCN_SIGNATURE)?;
-        let header_written = self.header.write_bytes(&mut self.stream)?;
+        self.header.write_bytes(&mut self.stream)?;
 
         // Offsets
         let offset_start_pos = self.stream.seek(SeekFrom::Current(0))?;
@@ -129,7 +131,7 @@ impl<T: Write + Seek> ScnWriter<T> {
             self.stream.write_all(&resource_buffer)?;
         }
 
-        // Extra Resources
+        // Extra resources support from 4
         if self.header.version > 3 {
             let mut resource_buffer = Vec::<u8>::new();
             let mut index_list = Vec::<u64>::new();
@@ -153,7 +155,9 @@ impl<T: Write + Seek> ScnWriter<T> {
         }
 
         // Rewrite entries
-        let end = self.stream.seek(SeekFrom::Current(0)).unwrap();
+        let file_end = self.stream.seek(SeekFrom::Current(0)).unwrap();
+
+        self.stream.seek(SeekFrom::Start(offset_start_pos))?;
 
         self.stream.write_u32::<LittleEndian>(name_offset_pos)?;
         self.stream.write_u32::<LittleEndian>(string_offset_pos)?;
@@ -173,9 +177,9 @@ impl<T: Write + Seek> ScnWriter<T> {
             }
         }
 
-        self.stream.seek(SeekFrom::Start(end))?;
+        self.stream.seek(SeekFrom::Start(file_end))?;
 
-        Ok((0, self.stream))
+        Ok((file_end - file_start, self.stream))
     }
 
 }
