@@ -7,6 +7,7 @@
 pub mod collection;
 pub mod number;
 pub mod reference;
+pub mod binary_tree;
 
 use std::io::{Read, Seek, Write};
 

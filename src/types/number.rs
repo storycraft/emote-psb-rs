@@ -118,3 +118,39 @@ impl PsbNumber {
     }
 
 }
+
+impl From<u8> for PsbNumber {
+    fn from(number: u8) -> Self {
+        PsbNumber::Integer(number as u64)
+    }
+}
+
+impl From<u16> for PsbNumber {
+    fn from(number: u16) -> Self {
+        PsbNumber::Integer(number as u64)
+    }
+}
+
+impl From<u32> for PsbNumber {
+    fn from(number: u32) -> Self {
+        PsbNumber::Integer(number as u64)
+    }
+}
+
+impl From<u64> for PsbNumber {
+    fn from(number: u64) -> Self {
+        PsbNumber::Integer(number)
+    }
+}
+
+impl From<f32> for PsbNumber {
+    fn from(number: f32) -> Self {
+        PsbNumber::Float(number)
+    }
+}
+
+impl From<f64> for PsbNumber {
+    fn from(number: f64) -> Self {
+        PsbNumber::Double(number)
+    }
+}

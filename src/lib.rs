@@ -14,15 +14,15 @@ pub mod writer;
 use header::PsbHeader;
 use io::Seek;
 use types::PsbValue;
-pub use reader::ScnReader;
+pub use reader::PsbReader;
 
 use std::{error::Error, io::{self, Read, SeekFrom}};
 
-/// scn file signature
-pub const SCN_SIGNATURE: u32 = 0x425350;
+/// psb file signature
+pub const PSB_SIGNATURE: u32 = 0x425350;
 
-/// compressed scn file signature
-pub const SCN_MDF_SIGNATURE: u32 = 0x66646D;
+/// compressed psb file signature
+pub const PSB_MDF_SIGNATURE: u32 = 0x66646D;
 
 #[derive(Debug)]
 pub struct PsbError {
@@ -227,7 +227,7 @@ impl<T: Read + Seek> PsbFile<T> {
 mod tests {
     use std::{fs::File, io::{BufReader, Cursor, Read}};
 
-    use crate::{PsbRefTable, types::{PsbValue, collection::PsbList, number::PsbNumber}, reader::ScnReader};
+    use crate::{PsbRefTable, types::{PsbValue, collection::PsbList, number::PsbNumber}, reader::PsbReader};
 
     #[test]
     fn test() {
@@ -237,7 +237,7 @@ mod tests {
 
         BufReader::new(&mut file).read_to_end(&mut mem_buf).unwrap();
 
-        let mut file = ScnReader::open_scn_file(Cursor::new(mem_buf)).unwrap();
+        let mut file = PsbReader::open_psb_file(Cursor::new(mem_buf)).unwrap();
         
         let (_, root) = file.read_root().unwrap();
 

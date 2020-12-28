@@ -10,22 +10,22 @@ use byteorder::{ReadBytesExt, LittleEndian};
 use encoding::{Encoding, all::UTF_8};
 use flate2::read::ZlibDecoder;
 
-use crate::{SCN_MDF_SIGNATURE, SCN_SIGNATURE, PsbError, PsbErrorKind, PsbFile, PsbRefTable, header::{MdfHeader, PsbHeader}, types::PsbValue};
+use crate::{PsbError, PsbErrorKind, PsbFile, PsbRefTable, PSB_MDF_SIGNATURE, PSB_SIGNATURE, header::{MdfHeader, PsbHeader}, types::{PsbValue, binary_tree::BinaryTree}};
 
-pub struct ScnReader;
+pub struct PsbReader;
 
-impl ScnReader {
+impl PsbReader {
     
-    /// Open scn file as ScnFile using stream
-    pub fn open_scn_file<T: Read + Seek>(mut stream: T) -> Result<PsbFile<T>, PsbError> {
-        let (entry_point, header, table) = Self::open_scn(&mut stream)?;
+    /// Open psb file as PsbFile using stream
+    pub fn open_psb_file<T: Read + Seek>(mut stream: T) -> Result<PsbFile<T>, PsbError> {
+        let (entry_point, header, table) = Self::open_psb(&mut stream)?;
 
         PsbFile::new(header, table, entry_point, stream)
     }
 
     pub fn open_mdf_file<T: Read + Seek>(mut stream: T) -> Result<PsbFile<Cursor<Vec<u8>>>, PsbError> {
         let signature = stream.read_u32::<LittleEndian>()?;
-        if signature != SCN_MDF_SIGNATURE {
+        if signature != PSB_MDF_SIGNATURE {
             return Err(PsbError::new(PsbErrorKind::InvalidFile, None));
         }
 
@@ -42,17 +42,17 @@ impl ScnReader {
 
         let mut cursor = Cursor::new(buffer);
 
-        let (entry_point, header, table) = Self::open_scn(&mut cursor)?;
+        let (entry_point, header, table) = Self::open_psb(&mut cursor)?;
 
         PsbFile::new(header, table, entry_point, cursor)
     }
 
     /// Read entrypoint, header, scn table
-    pub fn open_scn<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbHeader, PsbRefTable), PsbError> {
+    pub fn open_psb<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbHeader, PsbRefTable), PsbError> {
         let start = stream.seek(SeekFrom::Current(0)).unwrap();
 
         let signature = stream.read_u32::<LittleEndian>()?;
-        if signature != SCN_SIGNATURE {
+        if signature != PSB_SIGNATURE {
             return Err(PsbError::new(PsbErrorKind::InvalidFile, None));
         }
 
@@ -125,50 +125,10 @@ impl ScnReader {
         // Names
         {
             stream.seek(SeekFrom::Start(start + name_offset_pos as u64))?;
-            let (_, charsets) = match PsbValue::from_bytes(stream)? {
-    
-                (read, PsbValue::IntArray(array)) => Ok((read, array)),
-    
-                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-    
-            }?;
-            let (_, name_tree) = match PsbValue::from_bytes(stream)? {
-    
-                (read, PsbValue::IntArray(array)) => Ok((read, array)),
-    
-                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-    
-            }?;
-            let (_, name_indexes) = match PsbValue::from_bytes(stream)? {
-    
-                (read, PsbValue::IntArray(array)) => Ok((read, array)),
-    
-                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-    
-            }?;
+            let (_, btree) = BinaryTree::from_bytes(stream)?;
 
-            let charsets = charsets.unwrap();
-            let name_tree = name_tree.unwrap();
-            let name_indexes = name_indexes.unwrap();
-
-            for index in name_indexes {
-                let mut buffer = Vec::<u8>::new();
-                
-                let mut chr = name_tree[index as usize];
-    
-                while chr != 0 {
-                    let code = name_tree[chr as usize];
-    
-                    let decoded = chr - charsets[code as usize];
-                    
-                    chr = code;
-    
-                    buffer.push(decoded as u8);
-                }
-    
-                buffer.reverse();
-                let name = UTF_8.decode(&buffer, encoding::DecoderTrap::Replace).unwrap();
-    
+            for raw_string in btree.unwrap() {
+                let name = UTF_8.decode(&raw_string, encoding::DecoderTrap::Replace).unwrap();
                 names.push(name);
             }
         }

@@ -6,11 +6,12 @@
 
 use std::io::{Seek, SeekFrom, Write};
 
+use adler::Adler32;
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use crate::{SCN_SIGNATURE, PsbError, PsbRefTable, header::PsbHeader, types::{PsbValue, collection::PsbIntArray}};
+use crate::{PSB_SIGNATURE, PsbError, PsbRefTable, header::PsbHeader, types::{PsbValue, collection::PsbIntArray}};
 
-pub struct ScnWriter<T: Write + Seek> {
+pub struct PsbWriter<T: Write + Seek> {
 
     pub header: PsbHeader,
 
@@ -22,7 +23,7 @@ pub struct ScnWriter<T: Write + Seek> {
 
 }
 
-impl<T: Write + Seek> ScnWriter<T> {
+impl<T: Write + Seek> PsbWriter<T> {
 
     pub fn new(
         header: PsbHeader,
@@ -42,8 +43,17 @@ impl<T: Write + Seek> ScnWriter<T> {
     pub fn finish(mut self) -> Result<(u64, T), PsbError> {
         let file_start = self.stream.seek(SeekFrom::Current(0)).unwrap();
 
-        self.stream.write_u32::<LittleEndian>(SCN_SIGNATURE)?;
+        self.stream.write_u32::<LittleEndian>(PSB_SIGNATURE)?;
         self.header.write_bytes(&mut self.stream)?;
+        
+        let header_length = match self.header.version {
+            version if version < 3 => 28,
+            version if version == 3 => 32,
+            
+            _ => 44
+        };
+
+        self.stream.write_u32::<LittleEndian>(header_length)?;
 
         // Offsets
         let offset_start_pos = self.stream.seek(SeekFrom::Current(0))?;
@@ -64,13 +74,13 @@ impl<T: Write + Seek> ScnWriter<T> {
             }
         }
         
-        let mut name_offset_pos = 0_u32;
-        let mut string_offset_pos = 0_u32;
-        let mut string_data_pos = 0_u32;
-        let mut resource_offset_pos = 0_u32;
-        let mut resource_lengths_pos = 0_u32;
-        let mut resource_data_pos = 0_u32;
-        let mut entry_point_pos = 0_u32;
+        let name_offset_pos: u32;
+        let string_offset_pos: u32;
+        let string_data_pos: u32;
+        let resource_offset_pos: u32;
+        let resource_lengths_pos: u32;
+        let resource_data_pos: u32;
+        let entry_point_pos: u32;
 
         let mut extra_offset_pos = 0_u32;
         let mut extra_lengths_pos = 0_u32;
@@ -84,22 +94,21 @@ impl<T: Write + Seek> ScnWriter<T> {
         
         // Strings
         {
-            let mut string_buffer = Vec::<u8>::new();
             let mut index_list = Vec::<u64>::new();
 
+            string_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
             for string in self.ref_table.strings() {
                 let bytes = string.as_bytes();
 
-                index_list.push(string_buffer.len() as u64);
-                string_buffer.write_all(bytes)?;
-                string_buffer.write_u8(0)?;
+                let current_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
+
+                index_list.push(current_pos - string_data_pos as u64);
+                self.stream.write_all(bytes)?;
+                self.stream.write_u8(0)?;
             }
 
             string_offset_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::new(index_list).write_bytes(&mut self.stream)?;
-
-            string_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            self.stream.write_all(&string_buffer)?;
+            PsbIntArray::from(index_list).write_bytes(&mut self.stream)?;
         }
 
         // Root Entry
@@ -110,48 +119,46 @@ impl<T: Write + Seek> ScnWriter<T> {
 
         // Resources
         {
-            let mut resource_buffer = Vec::<u8>::new();
             let mut index_list = Vec::<u64>::new();
             let mut length_list = Vec::<u64>::new();
 
+            resource_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
             for res in self.ref_table.resources() {
-                index_list.push(resource_buffer.len() as u64);
+                let current_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
+
+                index_list.push(current_pos - resource_data_pos as u64);
                 length_list.push(res.len() as u64);
 
-                resource_buffer.write_all(res)?;
+                self.stream.write_all(res)?;
             }
 
             resource_offset_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::new(index_list).write_bytes(&mut self.stream)?;
+            PsbIntArray::from(index_list).write_bytes(&mut self.stream)?;
 
             resource_lengths_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::new(length_list).write_bytes(&mut self.stream)?;
-
-            resource_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            self.stream.write_all(&resource_buffer)?;
+            PsbIntArray::from(length_list).write_bytes(&mut self.stream)?;
         }
 
         // Extra resources support from 4
         if self.header.version > 3 {
-            let mut resource_buffer = Vec::<u8>::new();
             let mut index_list = Vec::<u64>::new();
             let mut length_list = Vec::<u64>::new();
 
-            for res in self.ref_table.extra() {
-                index_list.push(resource_buffer.len() as u64);
+            extra_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
+            for res in self.ref_table.resources() {
+                let current_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
+
+                index_list.push(current_pos - extra_data_pos as u64);
                 length_list.push(res.len() as u64);
 
-                resource_buffer.write_all(res)?;
+                self.stream.write_all(res)?;
             }
 
             extra_offset_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::new(index_list).write_bytes(&mut self.stream)?;
+            PsbIntArray::from(index_list).write_bytes(&mut self.stream)?;
 
             extra_lengths_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::new(length_list).write_bytes(&mut self.stream)?;
-
-            extra_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            self.stream.write_all(&resource_buffer)?;
+            PsbIntArray::from(length_list).write_bytes(&mut self.stream)?;
         }
 
         // Rewrite entries
@@ -167,8 +174,18 @@ impl<T: Write + Seek> ScnWriter<T> {
         self.stream.write_u32::<LittleEndian>(resource_data_pos)?;
         self.stream.write_u32::<LittleEndian>(entry_point_pos)?;
         if self.header.version > 2 {
-            // TODO: Checksum
-            self.stream.write_u32::<LittleEndian>(0)?;
+            let mut adler = Adler32::new();
+
+            adler.write_slice(&header_length.to_le_bytes());
+            adler.write_slice(&name_offset_pos.to_le_bytes());
+            adler.write_slice(&string_offset_pos.to_le_bytes());
+            adler.write_slice(&string_data_pos.to_le_bytes());
+            adler.write_slice(&resource_offset_pos.to_le_bytes());
+            adler.write_slice(&resource_lengths_pos.to_le_bytes());
+            adler.write_slice(&resource_data_pos.to_le_bytes());
+            adler.write_slice(&entry_point_pos.to_le_bytes());
+
+            self.stream.write_u32::<LittleEndian>(adler.checksum())?;
 
             if self.header.version > 3 {
                 self.stream.write_u32::<LittleEndian>(extra_offset_pos)?;
