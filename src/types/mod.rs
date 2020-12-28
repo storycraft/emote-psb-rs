@@ -13,7 +13,7 @@ use std::io::{Read, Seek, Write};
 use collection::{PsbIntArray, PsbList, PsbObject};
 use number::PsbNumber;
 
-use crate::{ScnError, ScnErrorKind};
+use crate::{PsbError, PsbErrorKind};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
 use self::reference::PsbReference;
@@ -82,7 +82,7 @@ pub enum PsbValue {
 
 impl PsbValue {
 
-    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbValue), ScnError> {
+    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbValue), PsbError> {
         let value_type = stream.read_u8()?;
 
         match value_type {
@@ -156,12 +156,12 @@ impl PsbValue {
 
             _ => {
                 println!("Attempted to read {}", value_type);
-                Err(ScnError::new(ScnErrorKind::InvalidPSBValue, None))
+                Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
             }
         }
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         match &self {
             PsbValue::None => {
                 stream.write_u8(PSB_TYPE_NONE)?;

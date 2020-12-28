@@ -8,13 +8,13 @@ use std::io::{Seek, SeekFrom, Write};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use crate::{SCN_SIGNATURE, ScnError, ScnRefTable, header::ScnHeader, types::{PsbValue, collection::PsbIntArray}};
+use crate::{SCN_SIGNATURE, PsbError, PsbRefTable, header::PsbHeader, types::{PsbValue, collection::PsbIntArray}};
 
 pub struct ScnWriter<T: Write + Seek> {
 
-    pub header: ScnHeader,
+    pub header: PsbHeader,
 
-    pub ref_table: ScnRefTable,
+    pub ref_table: PsbRefTable,
 
     pub entry: PsbValue,
 
@@ -25,8 +25,8 @@ pub struct ScnWriter<T: Write + Seek> {
 impl<T: Write + Seek> ScnWriter<T> {
 
     pub fn new(
-        header: ScnHeader,
-        ref_table: ScnRefTable,
+        header: PsbHeader,
+        ref_table: PsbRefTable,
         entry: PsbValue,
         stream: T
     ) -> Self {
@@ -39,7 +39,7 @@ impl<T: Write + Seek> ScnWriter<T> {
     }
 
     /// Write file and finish stream
-    pub fn finish(mut self) -> Result<(u64, T), ScnError> {
+    pub fn finish(mut self) -> Result<(u64, T), PsbError> {
         let file_start = self.stream.seek(SeekFrom::Current(0)).unwrap();
 
         self.stream.write_u32::<LittleEndian>(SCN_SIGNATURE)?;
@@ -79,7 +79,7 @@ impl<T: Write + Seek> ScnWriter<T> {
         // TODO:
         // Names
         {
-
+            name_offset_pos = 0;
         }
         
         // Strings

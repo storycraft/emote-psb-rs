@@ -6,7 +6,7 @@
 
 use std::io::{Read, Write};
 
-use crate::{ScnError, ScnErrorKind};
+use crate::{PsbError, PsbErrorKind};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
@@ -23,7 +23,7 @@ pub enum PsbNumber {
 
 impl PsbNumber {
 
-    pub fn from_bytes(number_type: u8, stream: &mut impl Read) -> Result<(u64, Self), ScnError> {
+    pub fn from_bytes(number_type: u8, stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
         match number_type {
 
             PSB_TYPE_DOUBLE => {
@@ -47,14 +47,14 @@ impl PsbNumber {
             }
 
             _ => {
-                Err(ScnError::new(ScnErrorKind::InvalidPSBValue, None))
+                Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
             }
 
         }
     }
 
     /// Read integer with given size.
-    pub fn read_integer(number_size: u8, stream: &mut impl Read) -> Result<(u64, u64), ScnError> {
+    pub fn read_integer(number_size: u8, stream: &mut impl Read) -> Result<(u64, u64), PsbError> {
         if number_size == 0 {
             Ok((1, 0))
         } else if number_size <= 8 {
@@ -64,7 +64,7 @@ impl PsbNumber {
 
             Ok((1 + number_size as u64, u64::from_le_bytes(buf)))
         } else {
-            Err(ScnError::new(ScnErrorKind::InvalidPSBValue, None))
+            Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
         }
     }
 
@@ -90,7 +90,7 @@ impl PsbNumber {
         }
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         match self {
             PsbNumber::Integer(val) => {
                 let n = Self::get_n(*val);

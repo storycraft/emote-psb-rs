@@ -1,5 +1,3 @@
-
-
 /*
  * Created on Fri Dec 25 2020
  *
@@ -8,14 +6,12 @@
 
 pub mod types;
 
-pub mod btree;
-
 pub mod header;
 
 pub mod reader;
 pub mod writer;
 
-use header::ScnHeader;
+use header::PsbHeader;
 use io::Seek;
 use types::PsbValue;
 pub use reader::ScnReader;
@@ -29,20 +25,20 @@ pub const SCN_SIGNATURE: u32 = 0x425350;
 pub const SCN_MDF_SIGNATURE: u32 = 0x66646D;
 
 #[derive(Debug)]
-pub struct ScnError {
+pub struct PsbError {
 
-    kind: ScnErrorKind,
+    kind: PsbErrorKind,
     err: Option<Box<dyn Error>>
 
 }
 
-impl ScnError {
+impl PsbError {
 
-    pub fn new(kind: ScnErrorKind, err: Option<Box<dyn Error>>) -> Self {
+    pub fn new(kind: PsbErrorKind, err: Option<Box<dyn Error>>) -> Self {
         Self { kind, err }
     }
 
-    pub fn kind(&self) -> &ScnErrorKind {
+    pub fn kind(&self) -> &PsbErrorKind {
         &self.kind
     }
 
@@ -53,7 +49,7 @@ impl ScnError {
 }
 
 #[derive(Debug)]
-pub enum ScnErrorKind {
+pub enum PsbErrorKind {
 
     Io(io::Error),
     InvalidFile,
@@ -66,16 +62,16 @@ pub enum ScnErrorKind {
 
 }
 
-impl From<io::Error> for ScnError {
+impl From<io::Error> for PsbError {
 
     fn from(err: io::Error) -> Self {
-        ScnError::new(ScnErrorKind::Io(err), None)
+        PsbError::new(PsbErrorKind::Io(err), None)
     }
 
 }
 
 #[derive(Debug)]
-pub struct ScnRefTable {
+pub struct PsbRefTable {
 
     names: Vec<String>,
 
@@ -87,7 +83,7 @@ pub struct ScnRefTable {
 
 }
 
-impl ScnRefTable {
+impl PsbRefTable {
 
     pub fn new(names: Vec<String>,strings: Vec<String>, resources: Vec<Vec<u8>>, extra: Vec<Vec<u8>>) -> Self {
         Self {
@@ -178,11 +174,11 @@ impl ScnRefTable {
 }
 
 #[derive(Debug)]
-pub struct ScnFile<T: Read + Seek> {
+pub struct PsbFile<T: Read + Seek> {
 
-    header: ScnHeader,
+    header: PsbHeader,
     
-    ref_table: ScnRefTable,
+    ref_table: PsbRefTable,
 
     entry_point: u64,
 
@@ -190,9 +186,9 @@ pub struct ScnFile<T: Read + Seek> {
 
 }
 
-impl<T: Read + Seek> ScnFile<T> {
+impl<T: Read + Seek> PsbFile<T> {
 
-    pub fn new(header: ScnHeader, ref_table: ScnRefTable, entry_point: u64, mut stream: T) -> Result<Self, ScnError> {
+    pub fn new(header: PsbHeader, ref_table: PsbRefTable, entry_point: u64, mut stream: T) -> Result<Self, PsbError> {
         Ok(Self {
             header,
             ref_table,
@@ -201,11 +197,11 @@ impl<T: Read + Seek> ScnFile<T> {
         })
     }
 
-    pub fn header(&self) -> &ScnHeader {
+    pub fn header(&self) -> &PsbHeader {
         &self.header
     }
 
-    pub fn ref_table(&self) -> &ScnRefTable {
+    pub fn ref_table(&self) -> &PsbRefTable {
         &self.ref_table
     }
 
@@ -215,13 +211,13 @@ impl<T: Read + Seek> ScnFile<T> {
 
     /// Read root tree.
     /// Returns read size, PsbValue tuple.
-    pub fn read_root(&mut self) -> Result<(u64, PsbValue), ScnError> {
+    pub fn read_root(&mut self) -> Result<(u64, PsbValue), PsbError> {
         self.stream.seek(SeekFrom::Start(self.entry_point as u64))?;
         PsbValue::from_bytes(&mut self.stream)
     }
 
     /// Unwrap as ScnHeader, ScnRefTable, entry point, stream tuple
-    pub fn unwrap(self) -> (ScnHeader, ScnRefTable, u64, T) {
+    pub fn unwrap(self) -> (PsbHeader, PsbRefTable, u64, T) {
         (self.header, self.ref_table, self.entry_point, self.stream)
     }
 
@@ -231,7 +227,7 @@ impl<T: Read + Seek> ScnFile<T> {
 mod tests {
     use std::{fs::File, io::{BufReader, Cursor, Read}};
 
-    use crate::{ScnRefTable, types::{PsbValue, collection::PsbList, number::PsbNumber}, reader::ScnReader};
+    use crate::{PsbRefTable, types::{PsbValue, collection::PsbList, number::PsbNumber}, reader::ScnReader};
 
     #[test]
     fn test() {
@@ -329,7 +325,7 @@ mod tests {
         // display(0, &root, file.ref_table());
     }
 
-    fn display(depth: u16, value: &PsbValue, ref_table: &ScnRefTable) {
+    fn display(depth: u16, value: &PsbValue, ref_table: &PsbRefTable) {
         match value {
 
             PsbValue::None => print!("None"),

@@ -10,23 +10,23 @@ use byteorder::{ReadBytesExt, LittleEndian};
 use encoding::{Encoding, all::UTF_8};
 use flate2::read::ZlibDecoder;
 
-use crate::{SCN_MDF_SIGNATURE, SCN_SIGNATURE, ScnError, ScnErrorKind, ScnFile, ScnRefTable, header::{MdfHeader, ScnHeader}, types::PsbValue};
+use crate::{SCN_MDF_SIGNATURE, SCN_SIGNATURE, PsbError, PsbErrorKind, PsbFile, PsbRefTable, header::{MdfHeader, PsbHeader}, types::PsbValue};
 
 pub struct ScnReader;
 
 impl ScnReader {
     
     /// Open scn file as ScnFile using stream
-    pub fn open_scn_file<T: Read + Seek>(mut stream: T) -> Result<ScnFile<T>, ScnError> {
+    pub fn open_scn_file<T: Read + Seek>(mut stream: T) -> Result<PsbFile<T>, PsbError> {
         let (entry_point, header, table) = Self::open_scn(&mut stream)?;
 
-        ScnFile::new(header, table, entry_point, stream)
+        PsbFile::new(header, table, entry_point, stream)
     }
 
-    pub fn open_mdf_file<T: Read + Seek>(mut stream: T) -> Result<ScnFile<Cursor<Vec<u8>>>, ScnError> {
+    pub fn open_mdf_file<T: Read + Seek>(mut stream: T) -> Result<PsbFile<Cursor<Vec<u8>>>, PsbError> {
         let signature = stream.read_u32::<LittleEndian>()?;
         if signature != SCN_MDF_SIGNATURE {
-            return Err(ScnError::new(ScnErrorKind::InvalidFile, None));
+            return Err(PsbError::new(PsbErrorKind::InvalidFile, None));
         }
 
         let (_, mdf_header) = MdfHeader::from_bytes(&mut stream)?;
@@ -44,19 +44,19 @@ impl ScnReader {
 
         let (entry_point, header, table) = Self::open_scn(&mut cursor)?;
 
-        ScnFile::new(header, table, entry_point, cursor)
+        PsbFile::new(header, table, entry_point, cursor)
     }
 
     /// Read entrypoint, header, scn table
-    pub fn open_scn<T: Read + Seek>(stream: &mut T) -> Result<(u64, ScnHeader, ScnRefTable), ScnError> {
+    pub fn open_scn<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbHeader, PsbRefTable), PsbError> {
         let start = stream.seek(SeekFrom::Current(0)).unwrap();
 
         let signature = stream.read_u32::<LittleEndian>()?;
         if signature != SCN_SIGNATURE {
-            return Err(ScnError::new(ScnErrorKind::InvalidFile, None));
+            return Err(PsbError::new(PsbErrorKind::InvalidFile, None));
         }
 
-        let (_, header) = ScnHeader::from_bytes(stream)?;
+        let (_, header) = PsbHeader::from_bytes(stream)?;
 
         let _ = stream.read_u32::<LittleEndian>()?;
 
@@ -89,7 +89,7 @@ impl ScnReader {
 
                     (read, PsbValue::IntArray(array)) => Ok((read, array)),
         
-                    _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+                    _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
         
                 }?;
         
@@ -98,12 +98,12 @@ impl ScnReader {
 
                     (read, PsbValue::IntArray(array)) => Ok((read, array)),
         
-                    _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+                    _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
         
                 }?;
 
                 if extra_offsets.len() < extra_lengths.len() {
-                    return Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None));
+                    return Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None));
                 }
 
                 // Extra
@@ -129,21 +129,21 @@ impl ScnReader {
     
                 (read, PsbValue::IntArray(array)) => Ok((read, array)),
     
-                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
     
             }?;
             let (_, name_tree) = match PsbValue::from_bytes(stream)? {
     
                 (read, PsbValue::IntArray(array)) => Ok((read, array)),
     
-                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
     
             }?;
             let (_, name_indexes) = match PsbValue::from_bytes(stream)? {
     
                 (read, PsbValue::IntArray(array)) => Ok((read, array)),
     
-                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
     
             }?;
 
@@ -181,7 +181,7 @@ impl ScnReader {
     
                 (read, PsbValue::IntArray(array)) => Ok((read, array)),
     
-                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
     
             }?;
 
@@ -207,7 +207,7 @@ impl ScnReader {
     
                 (read, PsbValue::IntArray(array)) => Ok((read, array)),
     
-                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
     
             }?;
     
@@ -216,12 +216,12 @@ impl ScnReader {
     
                 (read, PsbValue::IntArray(array)) => Ok((read, array)),
     
-                _ => Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None))
+                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
     
             }?;
     
             if resource_offsets.len() < resource_lengths.len() {
-                return Err(ScnError::new(ScnErrorKind::InvalidOffsetTable, None));
+                return Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None));
             }
 
             let resource_offsets = resource_offsets.unwrap();
@@ -236,7 +236,7 @@ impl ScnReader {
             }
         }
 
-        let table = ScnRefTable::new(names, strings, resources, extra);
+        let table = PsbRefTable::new(names, strings, resources, extra);
 
         Ok((entry_point, header, table))
     }

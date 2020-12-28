@@ -6,13 +6,13 @@
 
 use std::io::{Read, Write};
 
-use crate::ScnError;
+use crate::PsbError;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-/// SCN file header
+/// PSB file header
 #[derive(Debug)]
-pub struct ScnHeader {
+pub struct PsbHeader {
 
     /// Version. (1, 2, 3, 4)
     pub version: u16,
@@ -21,11 +21,11 @@ pub struct ScnHeader {
 
 }
 
-impl ScnHeader {
+impl PsbHeader {
 
     /// Read header from current position.
     /// Returns read size, ScnHeader tuple.
-    pub fn from_bytes(stream: &mut impl Read) -> Result<(u64, Self), ScnError> {
+    pub fn from_bytes(stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
         let version = stream.read_u16::<LittleEndian>()?;
         let encryption = stream.read_u16::<LittleEndian>()?;
 
@@ -37,7 +37,7 @@ impl ScnHeader {
 
     /// Write scn header to stream.
     /// Returns written size.
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         stream.write_u16::<LittleEndian>(self.version)?;
         stream.write_u16::<LittleEndian>(self.encryption)?;
         
@@ -46,7 +46,7 @@ impl ScnHeader {
 
 }
 
-/// MDF (compressed scn) file header
+/// MDF (compressed psb) file header
 pub struct MdfHeader {
 
     /// Compressed size
@@ -58,13 +58,13 @@ impl MdfHeader {
 
     /// Read header from current position.
     /// Returns read size, MdfHeader tuple.
-    pub fn from_bytes(stream: &mut impl Read) -> Result<(u64, Self), ScnError> {
+    pub fn from_bytes(stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
         Ok((4, Self { size: stream.read_u32::<LittleEndian>()? }))
     }
 
-    /// Write scn header to stream.
+    /// Write mdf header to stream.
     /// Returns written size.
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         stream.write_u32::<LittleEndian>(self.size)?;
         
         Ok(4)

@@ -6,7 +6,7 @@
 
 use std::io::{Read, Write};
 
-use crate::ScnError;
+use crate::PsbError;
 
 use super::number::PsbNumber;
 
@@ -37,13 +37,13 @@ impl PsbReference {
         PsbNumber::get_n(self.ref_index)
     }
 
-    pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, Self), ScnError> {
+    pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
         let (ref_index_read, ref_index) = PsbNumber::read_integer(n, stream)?;
 
         Ok((ref_index_read, Self::new(ref_index)))
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         PsbNumber::Integer(self.ref_index).write_bytes(stream)
     }
 

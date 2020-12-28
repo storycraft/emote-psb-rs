@@ -6,7 +6,7 @@
 
 use std::{collections::{HashMap, hash_map}, io::{Read, Seek, SeekFrom, Write}, ops::Index, slice::Iter};
 
-use crate::ScnError;
+use crate::PsbError;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
@@ -52,7 +52,7 @@ impl PsbIntArray {
         PsbNumber::get_n(self.vec.iter().max().unwrap().clone()).min(1)
     }
 
-    pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, PsbIntArray), ScnError> {
+    pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, PsbIntArray), PsbError> {
         let (count_read, item_count) = PsbNumber::read_integer(n, stream)?;
 
         let item_byte_size = stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N;
@@ -70,7 +70,7 @@ impl PsbIntArray {
         Ok((count_read + item_total_read, PsbIntArray::new(list)))
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         let len = self.vec.len() as u64;
 
         let count_written = PsbNumber::Integer(len).write_bytes(stream)?;
@@ -129,7 +129,7 @@ impl PsbList {
         self.values.iter()
     }
 
-    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbList), ScnError> {
+    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbList), PsbError> {
         let (offsets_read, ref_offsets) = PsbIntArray::from_bytes(stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
 
         if ref_offsets.len() < 1 {
@@ -159,7 +159,7 @@ impl PsbList {
         Ok((offsets_read + 1 + total_read, Self::new(values)))
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
 
         let mut offsets = Vec::<u64>::new();
@@ -230,7 +230,7 @@ impl PsbObject {
         self.map.iter()
     }
 
-    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbObject), ScnError> {
+    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbObject), PsbError> {
         let (names_read, name_refs) = PsbIntArray::from_bytes(stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
         let (offsets_read, ref_offsets) = PsbIntArray::from_bytes(stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
 
@@ -261,7 +261,7 @@ impl PsbObject {
         Ok((names_read + offsets_read + 2 + total_read, Self::new(map)))
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, ScnError> {
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
 
         let mut name_refs = Vec::<u64>::new();
