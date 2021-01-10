@@ -2,8 +2,11 @@
 name = "emote-psb"
 version = "0.1.0"
 authors = ["storycraft <storycraft@pancake.sh>"]
+description = "E-mote PSB file"
 edition = "2018"
 license = "MIT"
+repository = "https://github.com/storycraft/emote-psb-rs"
+keywords = ["e-mote", "psb", "scn", "mdf"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
