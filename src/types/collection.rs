@@ -49,7 +49,7 @@ impl PsbIntArray {
 
     /// Item byte size
     pub fn get_item_n(&self) -> u8 {
-        PsbNumber::get_n(self.vec.iter().max().unwrap().clone()).min(1)
+        PsbNumber::get_n(self.vec.iter().max().unwrap().clone()).max(1)
     }
 
     pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, PsbIntArray), PsbError> {

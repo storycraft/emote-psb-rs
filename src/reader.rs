@@ -10,7 +10,7 @@ use byteorder::{ReadBytesExt, LittleEndian};
 use encoding::{Encoding, all::UTF_8};
 use flate2::read::ZlibDecoder;
 
-use crate::{PsbError, PsbErrorKind, PsbFile, PsbRefTable, PSB_MDF_SIGNATURE, PSB_SIGNATURE, header::{MdfHeader, PsbHeader}, types::{PsbValue, binary_tree::BinaryTree}};
+use crate::{PsbError, PsbErrorKind, PsbFile, PsbRefTable, PSB_MDF_SIGNATURE, PSB_SIGNATURE, header::{MdfHeader, PsbHeader}, types::{PsbValue, binary_tree::PsbBinaryTree}};
 
 pub struct PsbReader;
 
@@ -125,14 +125,13 @@ impl PsbReader {
         // Names
         {
             stream.seek(SeekFrom::Start(start + name_offset_pos as u64))?;
-            let (_, btree) = BinaryTree::from_bytes(stream)?;
+            let (_, btree) = PsbBinaryTree::from_bytes(stream)?;
 
             for raw_string in btree.unwrap() {
                 let name = UTF_8.decode(&raw_string, encoding::DecoderTrap::Replace).unwrap();
                 names.push(name);
             }
         }
-
     
         // Strings
         {

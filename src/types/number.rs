@@ -94,7 +94,6 @@ impl PsbNumber {
         match self {
             PsbNumber::Integer(val) => {
                 let n = Self::get_n(*val);
-
                 stream.write_all(&val.to_le_bytes()[..n as usize])?;
                 Ok(n as u64)
             },

@@ -11,7 +11,7 @@ use crate::PsbError;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 /// PSB file header
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct PsbHeader {
 
     /// Version. (1, 2, 3, 4)

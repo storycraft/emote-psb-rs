@@ -9,7 +9,7 @@ use std::io::{Seek, SeekFrom, Write};
 use adler::Adler32;
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use crate::{PSB_SIGNATURE, PsbError, PsbRefTable, header::PsbHeader, types::{PsbValue, collection::PsbIntArray}};
+use crate::{PSB_SIGNATURE, PsbError, PsbRefTable, header::PsbHeader, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbIntArray}};
 
 pub struct PsbWriter<T: Write + Seek> {
 
@@ -86,12 +86,18 @@ impl<T: Write + Seek> PsbWriter<T> {
         let mut extra_lengths_pos = 0_u32;
         let mut extra_data_pos = 0_u32;
 
-        // TODO:
         // Names
         {
-            name_offset_pos = 0;
+            let mut buffer_list = Vec::<Vec<u8>>::new();
+
+            for name in self.ref_table.names() {
+                buffer_list.push(name.as_bytes().into());
+            }
+
+            name_offset_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
+            PsbBinaryTree::from(buffer_list).write_bytes(&mut self.stream)?;
         }
-        
+
         // Strings
         {
             let mut index_list = Vec::<u64>::new();

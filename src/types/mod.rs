@@ -156,7 +156,6 @@ impl PsbValue {
             PSB_COMPILER_BINARY_TREE => Ok((1, PsbValue::CompilerBinaryTree)),
 
             _ => {
-                println!("Attempted to read {}", value_type);
                 Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
             }
         }

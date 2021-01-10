@@ -11,6 +11,8 @@ pub mod header;
 pub mod reader;
 pub mod writer;
 
+pub mod safe_index_vec;
+
 use header::PsbHeader;
 use io::Seek;
 use types::PsbValue;
@@ -70,7 +72,7 @@ impl From<io::Error> for PsbError {
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PsbRefTable {
 
     names: Vec<String>,
@@ -188,7 +190,7 @@ pub struct PsbFile<T: Read + Seek> {
 
 impl<T: Read + Seek> PsbFile<T> {
 
-    pub fn new(header: PsbHeader, ref_table: PsbRefTable, entry_point: u64, mut stream: T) -> Result<Self, PsbError> {
+    pub fn new(header: PsbHeader, ref_table: PsbRefTable, entry_point: u64, stream: T) -> Result<Self, PsbError> {
         Ok(Self {
             header,
             ref_table,
@@ -197,8 +199,12 @@ impl<T: Read + Seek> PsbFile<T> {
         })
     }
 
-    pub fn header(&self) -> &PsbHeader {
-        &self.header
+    pub fn header(&self) -> PsbHeader {
+        self.header
+    }
+
+    pub fn set_header(&mut self, header: PsbHeader) {
+        self.header = header;
     }
 
     pub fn ref_table(&self) -> &PsbRefTable {
@@ -216,9 +222,9 @@ impl<T: Read + Seek> PsbFile<T> {
         PsbValue::from_bytes(&mut self.stream)
     }
 
-    /// Unwrap as ScnHeader, ScnRefTable, entry point, stream tuple
-    pub fn unwrap(self) -> (PsbHeader, PsbRefTable, u64, T) {
-        (self.header, self.ref_table, self.entry_point, self.stream)
+    /// Unwrap stream
+    pub fn unwrap(self) -> T {
+        self.stream
     }
 
 }
@@ -226,20 +232,37 @@ impl<T: Read + Seek> PsbFile<T> {
 #[cfg(test)]
 mod tests {
     use std::{fs::File, io::{BufReader, Cursor, Read}};
+    
+    use encoding::{Encoding, all::UTF_8};
 
-    use crate::{PsbRefTable, types::{PsbValue, collection::PsbList, number::PsbNumber}, reader::PsbReader};
+    use crate::{PsbRefTable, header::PsbHeader, reader::PsbReader, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbList, number::PsbNumber}, writer::PsbWriter};
 
     #[test]
     fn test() {
-        let mut file = File::open("sample3.txt.scn").unwrap();
+        let mut file = File::open("sample2.ks.pure.scn").unwrap();
 
         let mut mem_buf = Vec::new();
 
         BufReader::new(&mut file).read_to_end(&mut mem_buf).unwrap();
-
+        
         let mut file = PsbReader::open_psb_file(Cursor::new(mem_buf)).unwrap();
         
         let (_, root) = file.read_root().unwrap();
+
+        let mut list = Vec::<Vec<u8>>::new();
+
+        for name in file.ref_table().names() {
+            println!("Name: {}", name);
+            list.push(name.as_bytes().into());
+        }
+
+        println!("read: {}", file.ref_table().names_len());
+
+        PsbWriter::new(PsbHeader {
+            version: 2,
+            encryption: 0
+        }, file.ref_table().clone(), root, File::create("sample2.ks.pure.scn").unwrap()).finish().unwrap();
+
 
         // display(0, &root, file.ref_table());
         return;
@@ -383,9 +406,9 @@ mod tests {
                 print!("{}}}", " ".repeat(depth as usize * 2));
             }
 
-            PsbValue::Resource(res) => {}
+            PsbValue::Resource(_) => {}
 
-            PsbValue::ExtraResource(res) => {}
+            PsbValue::ExtraResource(_) => {}
 
             PsbValue::CompilerNumber => {}
 
