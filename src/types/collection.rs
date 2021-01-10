@@ -282,7 +282,7 @@ impl PsbObject {
         }?;
 
         if name_refs.len() < 1 {
-            return Ok((names_read + offsets_read + 2, Self::new()));
+            return Ok((names_read + offsets_read, Self::new()));
         }
 
         let max_offset = ref_offsets.iter().max().unwrap();
@@ -305,7 +305,7 @@ impl PsbObject {
 
         stream.seek(SeekFrom::Start(start + total_read))?;
 
-        Ok((names_read + offsets_read + 2 + total_read, Self::from(map)))
+        Ok((names_read + offsets_read + total_read, Self::from(map)))
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
