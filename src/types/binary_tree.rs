@@ -73,10 +73,6 @@ impl PsbBinaryTree {
         let tree = tree.unwrap();
         let indexes = indexes.unwrap();
 
-        /* println!("Original offsets: {:?}", offsets);
-        println!("Original tree: {:?}", tree);
-        println!("Original indexes: {:?}", indexes);*/
-
         let mut list = Vec::<Vec<u8>>::with_capacity(indexes.len());
 
         for index in indexes {
@@ -128,8 +124,6 @@ impl PsbBinaryTree {
 
         offsets.push(1);
         self.make_sub_tree(&mut root, Vec::new(), &mut offsets, &mut tree, &mut indexes);
-
-        println!("Original tree: {:?}", tree);
 
         let offsets_written = PsbValue::IntArray(PsbIntArray::from(offsets.into_inner())).write_bytes(stream)?;
         let tree_written = PsbValue::IntArray(PsbIntArray::from(tree.into_inner())).write_bytes(stream)?;
