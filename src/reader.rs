@@ -129,13 +129,15 @@ impl PsbReader {
 
             for raw_string in btree.unwrap() {
                 let name = UTF_8.decode(&raw_string, encoding::DecoderTrap::Replace).unwrap();
+                
                 names.push(name);
             }
         }
-    
+
         // Strings
         {
             stream.seek(SeekFrom::Start(start + strings_offset_pos as u64))?;
+            
             let (_, string_offsets) = match PsbValue::from_bytes(stream)? {
     
                 (read, PsbValue::IntArray(array)) => Ok((read, array)),
@@ -154,7 +156,6 @@ impl PsbReader {
     
                 // Decode excluding nul
                 let string = UTF_8.decode(&buffer[..buffer.len() - 1], encoding::DecoderTrap::Replace).unwrap();
-    
                 strings.push(string);
             }
         }
@@ -169,7 +170,7 @@ impl PsbReader {
                 _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
     
             }?;
-    
+            
             stream.seek(SeekFrom::Start(start + resource_length_pos as u64))?;
             let (_, resource_lengths) = match PsbValue::from_bytes(stream)? {
     
@@ -185,6 +186,7 @@ impl PsbReader {
 
             let resource_offsets = resource_offsets.unwrap();
             let resource_lengths = resource_lengths.unwrap();
+
             for i in 0..resource_offsets.len() {
                 let mut buffer = Vec::new();
     

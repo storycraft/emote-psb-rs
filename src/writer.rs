@@ -94,15 +94,21 @@ impl<T: Write + Seek> PsbWriter<T> {
                 buffer_list.push(name.as_bytes().into());
             }
 
-            name_offset_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
+            name_offset_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
             PsbBinaryTree::from(buffer_list).write_bytes(&mut self.stream)?;
+        }
+
+        // Root Entry
+        {
+            entry_point_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
+            self.entry.write_bytes(&mut self.stream)?;
         }
 
         // Strings
         {
             let mut index_list = Vec::<u64>::new();
 
-            string_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
+            string_data_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
             for string in self.ref_table.strings() {
                 let bytes = string.as_bytes();
 
@@ -113,14 +119,8 @@ impl<T: Write + Seek> PsbWriter<T> {
                 self.stream.write_u8(0)?;
             }
 
-            string_offset_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::from(index_list).write_bytes(&mut self.stream)?;
-        }
-
-        // Root Entry
-        {
-            entry_point_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            self.entry.write_bytes(&mut self.stream)?;
+            string_offset_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
+            PsbValue::IntArray(PsbIntArray::from(index_list)).write_bytes(&mut self.stream)?;
         }
 
         // Resources
@@ -128,9 +128,9 @@ impl<T: Write + Seek> PsbWriter<T> {
             let mut index_list = Vec::<u64>::new();
             let mut length_list = Vec::<u64>::new();
 
-            resource_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
+            resource_data_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
             for res in self.ref_table.resources() {
-                let current_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
+                let current_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start;
 
                 index_list.push(current_pos - resource_data_pos as u64);
                 length_list.push(res.len() as u64);
@@ -138,11 +138,11 @@ impl<T: Write + Seek> PsbWriter<T> {
                 self.stream.write_all(res)?;
             }
 
-            resource_offset_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::from(index_list).write_bytes(&mut self.stream)?;
+            resource_offset_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
+            PsbValue::IntArray(PsbIntArray::from(index_list)).write_bytes(&mut self.stream)?;
 
-            resource_lengths_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::from(length_list).write_bytes(&mut self.stream)?;
+            resource_lengths_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
+            PsbValue::IntArray(PsbIntArray::from(length_list)).write_bytes(&mut self.stream)?;
         }
 
         // Extra resources support from 4
@@ -150,7 +150,7 @@ impl<T: Write + Seek> PsbWriter<T> {
             let mut index_list = Vec::<u64>::new();
             let mut length_list = Vec::<u64>::new();
 
-            extra_data_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
+            extra_data_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
             for res in self.ref_table.resources() {
                 let current_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
 
@@ -160,11 +160,11 @@ impl<T: Write + Seek> PsbWriter<T> {
                 self.stream.write_all(res)?;
             }
 
-            extra_offset_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::from(index_list).write_bytes(&mut self.stream)?;
+            extra_offset_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
+            PsbValue::IntArray(PsbIntArray::from(index_list)).write_bytes(&mut self.stream)?;
 
-            extra_lengths_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-            PsbIntArray::from(length_list).write_bytes(&mut self.stream)?;
+            extra_lengths_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
+            PsbValue::IntArray(PsbIntArray::from(length_list)).write_bytes(&mut self.stream)?;
         }
 
         // Rewrite entries

@@ -85,7 +85,7 @@ impl PsbValue {
 
     pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbValue), PsbError> {
         let value_type = stream.read_u8()?;
-
+        
         match value_type {
             PSB_TYPE_NONE => Ok((1, PsbValue::None)),
             PSB_TYPE_NULL => Ok((1, PsbValue::Null)),
@@ -204,15 +204,13 @@ impl PsbValue {
             },
 
             PsbValue::IntArray(array) => {
-                let len = array.len() as u64;
-                stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + PsbNumber::get_n(len))?;
+                stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + array.get_n())?;
 
                 Ok(1 + array.write_bytes(stream)?)
             },
 
             PsbValue::String(string) => {
-                let n = string.get_n();
-                stream.write_u8(PSB_TYPE_STRING_N + n)?;
+                stream.write_u8(PSB_TYPE_STRING_N + string.get_n())?;
 
                 Ok(1 + string.write_bytes(stream)?)
             },
@@ -230,14 +228,12 @@ impl PsbValue {
             },
 
             PsbValue::Resource(res) => {
-                let n = res.get_n();
-                stream.write_u8(PSB_TYPE_EXTRA_N + n)?;
+                stream.write_u8(PSB_TYPE_EXTRA_N + res.get_n())?;
 
                 Ok(1 + res.write_bytes(stream)?)
             },
             PsbValue::ExtraResource(res) => {
-                let n = res.get_n();
-                stream.write_u8(PSB_TYPE_EXTRA_N + n)?;
+                stream.write_u8(PSB_TYPE_EXTRA_N + res.get_n())?;
 
                 Ok(1 + res.write_bytes(stream)?)
             },

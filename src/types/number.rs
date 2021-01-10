@@ -94,7 +94,7 @@ impl PsbNumber {
         match self {
             PsbNumber::Integer(val) => {
                 let n = Self::get_n(*val);
-                stream.write_all(&val.to_le_bytes()[..n as usize])?;
+                Self::write_integer(n, *val, stream)?;
                 Ok(n as u64)
             },
 
@@ -114,6 +114,16 @@ impl PsbNumber {
             }
 
         }
+    }
+
+    pub fn write_integer(n: u8, number: u64, stream: &mut impl Write) -> Result<u8, PsbError> {
+        if n > 0 {
+            stream.write_all(&number.to_le_bytes()[..n as usize])?;
+
+            return Ok(n);
+        }
+
+        Ok(0)
     }
 
 }

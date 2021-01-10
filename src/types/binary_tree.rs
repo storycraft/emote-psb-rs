@@ -4,7 +4,7 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-use std::{collections::{BTreeMap, btree_map}, io::{Read, Seek, Write}, slice::Iter};
+use std::{collections::{HashMap, hash_map}, io::{Read, Seek, Write}, slice::Iter};
 
 use crate::{PsbError, PsbErrorKind, safe_index_vec::SafeIndexVec};
 
@@ -211,7 +211,7 @@ impl From<Vec<Vec<u8>>> for PsbBinaryTree {
 pub struct TreeNode {
 
     /// Children value, node
-    children: BTreeMap<u8, TreeNode>,
+    children: HashMap<u8, TreeNode>,
     
     pub begin_pos: u64,
     pub id: u64
@@ -222,7 +222,7 @@ impl TreeNode {
 
     pub fn new() -> Self {
         Self {
-            children: BTreeMap::new(),
+            children: HashMap::new(),
             id: 0,
             begin_pos: 0
         }
@@ -236,11 +236,11 @@ impl TreeNode {
         self.children.keys().max()
     }
 
-    pub fn iter(&self) -> btree_map::Iter<u8, Self> {
+    pub fn iter(&self) -> hash_map::Iter<u8, Self> {
         self.children.iter()
     }
 
-    pub fn iter_mut(&mut self) -> btree_map::IterMut<u8, Self> {
+    pub fn iter_mut(&mut self) -> hash_map::IterMut<u8, Self> {
         self.children.iter_mut()
     }
 
