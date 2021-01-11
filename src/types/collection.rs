@@ -4,7 +4,7 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-use std::{collections::HashMap, io::{Read, Seek, SeekFrom, Write}, ops::Index, slice::Iter};
+use std::{io::{Read, Seek, SeekFrom, Write}, ops::Index, slice::Iter};
 
 use crate::{PsbError, PsbErrorKind};
 
@@ -185,29 +185,15 @@ impl PsbList {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
-        let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
-
         let mut offsets = Vec::<u64>::new();
         let mut data_buffer = Vec::<u8>::new();
 
         let mut total_data_written = 0_u64;
 
         for value in &self.values {
-            let mut cached = false;
-            for (offset, cache_value) in &value_offset_cache {
-                if value == *cache_value {
-                    offsets.push(*offset);
-                    cached = true;
-                    break;
-                }
-            }
+            offsets.push(total_data_written);
 
-            if !cached {
-                value_offset_cache.insert(total_data_written, &value);
-                offsets.push(total_data_written);
-
-                total_data_written += value.write_bytes(&mut data_buffer)?;
-            }
+            total_data_written += value.write_bytes(&mut data_buffer)?;
         }
 
         let offset_written = PsbValue::IntArray(PsbIntArray::from(offsets)).write_bytes(stream)?;
@@ -309,8 +295,6 @@ impl PsbObject {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
-        let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
-
         let mut name_refs = Vec::<u64>::new();
         let mut offsets = Vec::<u64>::new();
         let mut data_buffer = Vec::<u8>::new();
@@ -320,21 +304,9 @@ impl PsbObject {
         for (name_ref, value) in &self.map {
             name_refs.push(*name_ref);
 
-            let mut cached = false;
-            for (offset, cache_value) in value_offset_cache.iter() {
-                if value == *cache_value {
-                    offsets.push(*offset);
-                    cached = true;
-                    break;
-                }
-            }
+            offsets.push(total_data_written);
 
-            if !cached {
-                value_offset_cache.insert(total_data_written, &value);
-                offsets.push(total_data_written);
-
-                total_data_written += value.write_bytes(&mut data_buffer)?;
-            }
+            total_data_written += value.write_bytes(&mut data_buffer)?;
         }
 
         let names_written = PsbValue::IntArray(PsbIntArray::from(name_refs)).write_bytes(stream)?;
