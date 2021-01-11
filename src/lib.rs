@@ -11,7 +11,7 @@ pub mod header;
 pub mod reader;
 pub mod writer;
 
-pub mod safe_index_vec;
+mod internal;
 
 use header::PsbHeader;
 use io::Seek;

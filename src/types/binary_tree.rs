@@ -6,7 +6,7 @@
 
 use std::{collections::{HashMap, hash_map}, io::{Read, Seek, Write}, slice::Iter};
 
-use crate::{PsbError, PsbErrorKind, safe_index_vec::SafeIndexVec};
+use crate::{PsbError, PsbErrorKind, internal::SafeIndexVec};
 
 use super::{PsbValue, collection::PsbIntArray};
 
