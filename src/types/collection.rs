@@ -9,6 +9,7 @@ use std::{collections::{HashMap, hash_map}, io::{Read, Seek, SeekFrom, Write}, o
 use crate::{PsbError, PsbErrorKind, PsbRefTable};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use itertools::Itertools;
 
 use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue, number::PsbNumber};
 
@@ -350,7 +351,9 @@ impl PsbObject {
 
         let mut total_data_written = 0_u64;
 
-        for (name, value) in &self.map {
+        for name in self.map.keys().into_iter().sorted() {
+            let value = self.map.get(name).unwrap();
+
             let name_ref = if ref_cache.contains_key(name) {
                 *ref_cache.get(name).unwrap()
             } else {
