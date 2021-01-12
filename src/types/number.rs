@@ -62,13 +62,13 @@ impl PsbNumber {
 
             stream.read_exact(&mut buf[..number_size as usize])?;
 
-            Ok((1 + number_size as u64, i64::from_le_bytes(buf)))
+            Ok((number_size as u64, i64::from_le_bytes(buf)))
         } else {
             Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
         }
     }
 
-    pub fn get_n(number: i64) -> u8 {
+    pub fn get_n(number: u64) -> u8 {
         if number <= 0 {
             0
         } else if number <= 0xff {
@@ -93,7 +93,7 @@ impl PsbNumber {
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         match self {
             PsbNumber::Integer(val) => {
-                let n = Self::get_n(*val);
+                let n = Self::get_n(*val as u64);
 
                 Self::write_integer(n, *val, stream)?;
                 Ok(n as u64)

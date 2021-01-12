@@ -9,7 +9,7 @@ use std::io::{Seek, SeekFrom, Write};
 use adler::Adler32;
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use crate::{PSB_SIGNATURE, PsbError, PsbRefs, VirtualPsb, offsets::{PsbOffsets, PsbResourcesOffset, PsbStringOffset}, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbIntArray}};
+use crate::{PSB_SIGNATURE, PsbError, PsbRefs, VirtualPsb, offsets::{PsbOffsets, PsbResourcesOffset, PsbStringOffset}, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbUintArray}};
 
 pub struct PsbWriter<T: Write + Seek> {
 
@@ -126,12 +126,12 @@ impl<T: Write + Seek> PsbWriter<T> {
 
     /// Write resources. Returns written size, PsbResourcesOffset tuple
     pub fn write_resources<W: Write + Seek>(resources: &Vec<Vec<u8>>, stream: &mut W) -> Result<(u64, PsbResourcesOffset), PsbError> {
-        let mut offset_list = Vec::<i64>::new();
-        let mut length_list = Vec::<i64>::new();
+        let mut offset_list = Vec::<u64>::new();
+        let mut length_list = Vec::<u64>::new();
 
-        let mut total_len = 0_i64;
+        let mut total_len = 0_u64;
         for res in resources.iter() {
-            let len = res.len() as i64;
+            let len = res.len() as u64;
 
             offset_list.push(total_len);
             length_list.push(len);
@@ -140,10 +140,10 @@ impl<T: Write + Seek> PsbWriter<T> {
         }
 
         let offset_pos = (stream.seek(SeekFrom::Current(0)).unwrap()) as u32;
-        let offsets_written = PsbValue::IntArray(PsbIntArray::from(offset_list)).write_bytes(stream)?;
+        let offsets_written = PsbValue::IntArray(PsbUintArray::from(offset_list)).write_bytes(stream)?;
 
         let lengths_pos = (stream.seek(SeekFrom::Current(0)).unwrap()) as u32;
-        let lengths_written = PsbValue::IntArray(PsbIntArray::from(length_list)).write_bytes(stream)?;
+        let lengths_written = PsbValue::IntArray(PsbUintArray::from(length_list)).write_bytes(stream)?;
 
         let data_pos = (stream.seek(SeekFrom::Current(0)).unwrap()) as u32;
         let mut data_written = 0_u64;
@@ -171,11 +171,11 @@ impl<T: Write + Seek> PsbWriter<T> {
 
     /// Write strings. Returns written size, PsbStringOffset tuple
     pub fn write_strings<W: Write + Seek>(strings: &Vec<String>, stream: &mut W) -> Result<(u64, PsbStringOffset), PsbError> {
-        let mut offset_list = Vec::<i64>::new();
+        let mut offset_list = Vec::<u64>::new();
 
-        let mut total_len = 0_i64;
+        let mut total_len = 0_u64;
         for string in strings.iter() {
-            let len = string.as_bytes().len() as i64;
+            let len = string.as_bytes().len() as u64;
             
             offset_list.push(total_len);
 
@@ -183,7 +183,7 @@ impl<T: Write + Seek> PsbWriter<T> {
         }
 
         let offset_pos = stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-        let offset_written = PsbValue::IntArray(PsbIntArray::from(offset_list)).write_bytes(stream)?;
+        let offset_written = PsbValue::IntArray(PsbUintArray::from(offset_list)).write_bytes(stream)?;
 
         let data_pos = stream.seek(SeekFrom::Current(0)).unwrap() as u32;
         for string in strings.iter() {

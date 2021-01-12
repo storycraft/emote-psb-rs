@@ -14,13 +14,13 @@ use itertools::Itertools;
 use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue, number::PsbNumber};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PsbIntArray {
+pub struct PsbUintArray {
 
-    vec: Vec<i64>
+    vec: Vec<u64>
 
 }
 
-impl PsbIntArray {
+impl PsbUintArray {
 
     pub fn new() -> Self {
         Self {
@@ -32,19 +32,19 @@ impl PsbIntArray {
         self.vec.len()
     }
 
-    pub fn iter(&self) -> Iter<'_, i64> {
+    pub fn iter(&self) -> Iter<'_, u64> {
         self.vec.iter()
     }
 
-    pub fn vec(&self) -> &Vec<i64> {
+    pub fn vec(&self) -> &Vec<u64> {
         &self.vec
     }
 
-    pub fn vec_mut(&mut self) -> &mut Vec<i64> {
+    pub fn vec_mut(&mut self) -> &mut Vec<u64> {
         &mut self.vec
     }
 
-    pub fn unwrap(self) -> Vec<i64> {
+    pub fn unwrap(self) -> Vec<u64> {
         self.vec
     }
 
@@ -54,25 +54,25 @@ impl PsbIntArray {
     }
 
     pub fn get_n(&self) -> u8 {
-        PsbNumber::get_n(self.vec.len() as i64).max(1)
+        PsbNumber::get_n(self.vec.len() as u64).max(1)
     }
 
-    pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, PsbIntArray), PsbError> {
+    pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, PsbUintArray), PsbError> {
         let (count_read, item_count) = PsbNumber::read_integer(n, stream)?;
 
         let item_byte_size = stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N;
 
-        let mut list = Vec::<i64>::new();
+        let mut list = Vec::<u64>::new();
 
         let mut item_total_read = 0_u64;
         for _ in 0..item_count {
             let (item_read, item) = PsbNumber::read_integer(item_byte_size, stream)?;
-            list.push(item);
+            list.push(item as u64);
 
             item_total_read += item_read;
         }
 
-        Ok((count_read + item_total_read, PsbIntArray::from(list)))
+        Ok((count_read + item_total_read, PsbUintArray::from(list)))
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
@@ -98,9 +98,9 @@ impl PsbIntArray {
 
 }
 
-impl From<Vec<i64>> for PsbIntArray {
+impl From<Vec<u64>> for PsbUintArray {
 
-    fn from(vec: Vec<i64>) -> Self {
+    fn from(vec: Vec<u64>) -> Self {
         Self {
             vec
         }
@@ -108,9 +108,9 @@ impl From<Vec<i64>> for PsbIntArray {
 
 }
 
-impl Index<usize> for PsbIntArray {
+impl Index<usize> for PsbUintArray {
     
-    type Output = i64;
+    type Output = u64;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.vec[index]
@@ -185,18 +185,18 @@ impl PsbList {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write, table: &PsbRefs) -> Result<u64, PsbError> {
-        let mut offsets = Vec::<i64>::new();
+        let mut offsets = Vec::<u64>::new();
         let mut data_buffer = Vec::<u8>::new();
 
         let mut total_data_written = 0_i64;
 
         for value in &self.values {
-            offsets.push(total_data_written);
+            offsets.push(total_data_written as u64);
 
             total_data_written += value.write_bytes_refs(&mut data_buffer, table)? as i64;
         }
 
-        let offset_written = PsbValue::IntArray(PsbIntArray::from(offsets)).write_bytes(stream)?;
+        let offset_written = PsbValue::IntArray(PsbUintArray::from(offsets)).write_bytes(stream)?;
         stream.write_all(&data_buffer)?;
 
         Ok(offset_written + total_data_written as u64)
@@ -345,11 +345,11 @@ impl PsbObject {
     pub fn write_bytes(&self, stream: &mut impl Write, ref_table: &PsbRefs) -> Result<u64, PsbError> {
         let mut ref_cache = HashMap::<&String, u64>::new();
 
-        let mut name_refs = Vec::<i64>::new();
-        let mut offsets = Vec::<i64>::new();
+        let mut name_refs = Vec::<u64>::new();
+        let mut offsets = Vec::<u64>::new();
         let mut data_buffer = Vec::<u8>::new();
 
-        let mut total_data_written = 0_i64;
+        let mut total_data_written = 0_u64;
 
         for name in self.map.keys().into_iter().sorted() {
             let value = self.map.get(name).unwrap();
@@ -368,14 +368,14 @@ impl PsbObject {
                 }?
             };
 
-            name_refs.push(name_ref as i64);
+            name_refs.push(name_ref);
             offsets.push(total_data_written);
 
-            total_data_written += value.write_bytes_refs(&mut data_buffer, ref_table)? as i64;
+            total_data_written += value.write_bytes_refs(&mut data_buffer, ref_table)?;
         }
 
-        let names_written = PsbValue::IntArray(PsbIntArray::from(name_refs)).write_bytes(stream)?;
-        let offset_written = PsbValue::IntArray(PsbIntArray::from(offsets)).write_bytes(stream)?;
+        let names_written = PsbValue::IntArray(PsbUintArray::from(name_refs)).write_bytes(stream)?;
+        let offset_written = PsbValue::IntArray(PsbUintArray::from(offsets)).write_bytes(stream)?;
 
         stream.write_all(&data_buffer)?;
 

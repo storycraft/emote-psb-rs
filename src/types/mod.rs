@@ -12,7 +12,7 @@ pub mod string;
 
 use std::io::{Read, Seek, Write};
 
-use collection::{PsbIntArray, PsbList, PsbObject};
+use collection::{PsbUintArray, PsbList, PsbObject};
 use number::PsbNumber;
 
 use crate::{PsbError, PsbErrorKind, PsbRefs};
@@ -62,7 +62,7 @@ pub enum PsbValue {
     None, Null,
     Bool(bool),
     Number(PsbNumber),
-    IntArray(PsbIntArray),
+    IntArray(PsbUintArray),
 
     String(PsbString),
     StringRef(PsbReference),
@@ -120,7 +120,7 @@ impl PsbValue {
             },
 
             _ if value_type > PSB_TYPE_INTEGER_ARRAY_N && value_type <= PSB_TYPE_INTEGER_ARRAY_N + 8 => {
-                let (read, array) = PsbIntArray::from_bytes(value_type - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
+                let (read, array) = PsbUintArray::from_bytes(value_type - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
                 Ok((read + 1, PsbValue::IntArray(array)))
             },
 
@@ -199,7 +199,7 @@ impl PsbValue {
             PsbValue::Number(number) => {
                 match number {
                     PsbNumber::Integer(integer) => {
-                        let n = PsbNumber::get_n(*integer);
+                        let n = PsbNumber::get_n(*integer as u64);
                         stream.write_u8(PSB_TYPE_INTEGER_N + n)?;
                     },
 
@@ -288,7 +288,7 @@ impl PsbValue {
                     },
         
                     None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-                }? as i64).max(1);
+                }?).max(1);
                 
                 stream.write_u8(PSB_TYPE_STRING_N + n)?;
 

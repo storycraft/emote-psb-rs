@@ -8,7 +8,7 @@ use std::{collections::{HashMap, hash_map}, io::{Read, Seek, Write}, slice::Iter
 
 use crate::{PsbError, PsbErrorKind, internal::SafeIndexVec};
 
-use super::{PsbValue, collection::PsbIntArray};
+use super::{PsbValue, collection::PsbUintArray};
 
 /// Binary tree
 pub struct PsbBinaryTree {
@@ -125,9 +125,9 @@ impl PsbBinaryTree {
         offsets.push(1);
         self.make_sub_tree(&mut root, Vec::new(), &mut offsets, &mut tree, &mut indexes);
 
-        let offsets_written = PsbValue::IntArray(PsbIntArray::from(offsets.into_inner())).write_bytes(stream)?;
-        let tree_written = PsbValue::IntArray(PsbIntArray::from(tree.into_inner())).write_bytes(stream)?;
-        let indexes_written = PsbValue::IntArray(PsbIntArray::from(indexes.into_inner())).write_bytes(stream)?;
+        let offsets_written = PsbValue::IntArray(PsbUintArray::from(offsets.into_inner())).write_bytes(stream)?;
+        let tree_written = PsbValue::IntArray(PsbUintArray::from(tree.into_inner())).write_bytes(stream)?;
+        let indexes_written = PsbValue::IntArray(PsbUintArray::from(indexes.into_inner())).write_bytes(stream)?;
 
         Ok(offsets_written + tree_written + indexes_written)
     }
@@ -137,9 +137,9 @@ impl PsbBinaryTree {
         &self,
         current_node: &mut TreeNode,
         value: Vec<u8>,
-        offsets: &mut SafeIndexVec<i64>,
-        tree: &mut SafeIndexVec<i64>,
-        indexes: &mut SafeIndexVec<i64>
+        offsets: &mut SafeIndexVec<u64>,
+        tree: &mut SafeIndexVec<u64>,
+        indexes: &mut SafeIndexVec<u64>
     ) {
         let min_value = *current_node.min_value().unwrap_or(&0);
         let begin_pos = current_node.begin_pos;
@@ -148,9 +148,9 @@ impl PsbBinaryTree {
         // make_tree
         for (child_value, child) in current_node.iter_mut() {
             let id = if current_id == 0 || min_value < 1 {
-                *child_value as i64 + offsets.get(current_id as usize).unwrap()
+                *child_value as u64 + offsets.get(current_id as usize).unwrap()
             } else {
-                (*child_value - min_value) as i64 + begin_pos
+                (*child_value - min_value) as u64 + begin_pos
             };
 
             tree.set(id as usize, current_id);
@@ -178,13 +178,13 @@ impl PsbBinaryTree {
             tree.set(end, 0);
 
             if *child_value == 0 {
-                let index = self.list.iter().position(|val| val.eq(&value)).unwrap() as i64;
+                let index = self.list.iter().position(|val| val.eq(&value)).unwrap() as u64;
                 offsets.set(child.id as usize, index);
                 indexes.set(index as usize, child.id);
             } else {
-                let offset = (pos - child_min) as i64;
+                let offset = (pos - child_min) as u64;
                 offsets.set(child.id as usize, offset);
-                child.begin_pos = pos as i64;
+                child.begin_pos = pos as u64;
             }
         }
 
@@ -213,8 +213,8 @@ pub struct TreeNode {
     /// Children value, node
     children: HashMap<u8, TreeNode>,
     
-    pub begin_pos: i64,
-    pub id: i64
+    pub begin_pos: u64,
+    pub id: u64
 
 }
 

@@ -58,7 +58,7 @@ impl PsbString {
         match ref_table.find_string_index(&self.string) {
 
             Some(ref_index) => {
-                PsbReference::new(ref_index as i64).write_bytes(stream)
+                PsbReference::new(ref_index).write_bytes(stream)
             },
 
             None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
