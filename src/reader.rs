@@ -10,7 +10,7 @@ use byteorder::{ReadBytesExt, LittleEndian};
 use encoding::{Encoding, all::UTF_8};
 use flate2::read::ZlibDecoder;
 
-use crate::{PSB_MDF_SIGNATURE, PSB_SIGNATURE, PsbError, PsbErrorKind, PsbFile, PsbRefTable, PsbResourcesTable, header::{MdfHeader, PsbHeader}, types::{PsbValue, binary_tree::PsbBinaryTree}};
+use crate::{PSB_MDF_SIGNATURE, PSB_SIGNATURE, PsbError, PsbErrorKind, PsbFile, PsbRefs, header::{MdfHeader, PsbHeader}, offsets::PsbOffsets, types::{PsbValue, binary_tree::PsbBinaryTree}};
 
 pub struct PsbReader;
 
@@ -49,87 +49,68 @@ impl PsbReader {
 
         let _ = stream.read_u32::<LittleEndian>()?;
 
-        // Name offset pos
-        let name_offset_pos = stream.read_u32::<LittleEndian>()?;
-        let strings_offset_pos = stream.read_u32::<LittleEndian>()?;
-        let strings_data_pos = stream.read_u32::<LittleEndian>()?;
-        let resources_table = PsbResourcesTable::new(
-            stream.read_u32::<LittleEndian>()?,
-            stream.read_u32::<LittleEndian>()?,
-            stream.read_u32::<LittleEndian>()?
-        );
-        let entry_point = start + stream.read_u32::<LittleEndian>()? as u64;
-        let mut extra_table: Option<PsbResourcesTable> = None;
+        // offsets
+        let (_, offsets) = PsbOffsets::from_bytes(header.version, &mut stream)?;
 
-        let mut names = Vec::<String>::new();
-        let mut strings = Vec::<String>::new();
+        stream.seek(SeekFrom::Start(start + offsets.name_offset as u64))?;
+        let (_, names) = Self::read_names(&mut stream)?;
 
-        let _header_checksum: Option<u32>;
-        if header.version > 2 {
-            // Adler32
-            _header_checksum = Some(stream.read_u32::<LittleEndian>()?);
+        stream.seek(SeekFrom::Start(start + offsets.strings.offset_pos as u64))?;
+        let (_, strings) = Self::read_strings(offsets.strings.data_pos + start as u32, &mut stream)?;
 
-            if header.version > 3 {
-                extra_table = Some(PsbResourcesTable::new(
-                    stream.read_u32::<LittleEndian>()?,
-                    stream.read_u32::<LittleEndian>()?,
-                    stream.read_u32::<LittleEndian>()?
-                ))
-            }
-        } else {
-            _header_checksum = None;
-        }
-
-        // Names
-        {
-            stream.seek(SeekFrom::Start(start + name_offset_pos as u64))?;
-            let (_, btree) = PsbBinaryTree::from_bytes(&mut stream)?;
-
-            for raw_string in btree.unwrap() {
-                let name = UTF_8.decode(&raw_string, encoding::DecoderTrap::Replace).unwrap();
-                
-                names.push(name);
-            }
-        }
-
-        // Strings
-        {
-            stream.seek(SeekFrom::Start(start + strings_offset_pos as u64))?;
-            
-            let (_, string_offsets) = match PsbValue::from_bytes(&mut stream)? {
-    
-                (read, PsbValue::IntArray(array)) => Ok((read, array)),
-    
-                _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-    
-            }?;
-
-            let mut reader = BufReader::new(stream.by_ref());
-            let string_offsets = string_offsets.unwrap();
-            for offset in string_offsets {
-                let mut buffer = Vec::new();
-    
-                reader.seek(SeekFrom::Start(start + strings_data_pos as u64 + offset))?;
-                reader.read_until(0x00, &mut buffer)?;
-    
-                // Decode excluding nul
-                let string = UTF_8.decode(&buffer[..buffer.len() - 1], encoding::DecoderTrap::Replace).unwrap();
-                strings.push(string);
-            }
-        }
-
-        let table = PsbRefTable::new(names, strings);
+        let refs = PsbRefs::new(names, strings);
 
         Ok(
             PsbFile::new(
                 header,
-                table,
-                resources_table,
-                extra_table,
-                entry_point,
+                refs,
+                offsets,
                 stream
             )
         )
+    }
+
+    pub fn read_names<T: Read + Seek>(stream: &mut T) -> Result<(u64, Vec<String>), PsbError> {
+        let mut names = Vec::<String>::new();
+
+        let (read, btree) = PsbBinaryTree::from_bytes(stream)?;
+
+        for raw_string in btree.unwrap() {
+            let name = UTF_8.decode(&raw_string, encoding::DecoderTrap::Replace).unwrap();
+            
+            names.push(name);
+        }
+
+        Ok((read, names))
+    }
+
+    pub fn read_strings<T: Read + Seek>(data_pos: u32, stream: &mut T) -> Result<(u64, Vec<String>), PsbError> {
+        let mut strings = Vec::<String>::new();
+
+        let (offsets_read, string_offsets) = match PsbValue::from_bytes(stream)? {
+    
+            (read, PsbValue::IntArray(array)) => Ok((read, array)),
+
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
+
+        }?;
+
+        let mut reader = BufReader::new(stream.by_ref());
+        let string_offsets = string_offsets.unwrap();
+
+        let mut read = 0_usize;
+        for offset in string_offsets {
+            let mut buffer = Vec::new();
+
+            reader.seek(SeekFrom::Start(data_pos as u64 + offset as u64))?;
+            read += reader.read_until(0x00, &mut buffer)?;
+
+            // Decode excluding nul
+            let string = UTF_8.decode(&buffer[..buffer.len() - 1], encoding::DecoderTrap::Replace).unwrap();
+            strings.push(string);
+        }
+
+        Ok((offsets_read + read as u64, strings))
     }
 
 }

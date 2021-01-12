@@ -15,7 +15,7 @@ use super::{PSB_TYPE_DOUBLE, PSB_TYPE_FLOAT, PSB_TYPE_INTEGER_N, PSB_TYPE_FLOAT0
 #[derive(Debug, Clone, PartialEq)]
 pub enum PsbNumber {
 
-    Integer(u64),
+    Integer(i64),
     Double(f64),
     Float(f32)
 
@@ -54,7 +54,7 @@ impl PsbNumber {
     }
 
     /// Read integer with given size.
-    pub fn read_integer(number_size: u8, stream: &mut impl Read) -> Result<(u64, u64), PsbError> {
+    pub fn read_integer(number_size: u8, stream: &mut impl Read) -> Result<(u64, i64), PsbError> {
         if number_size == 0 {
             Ok((1, 0))
         } else if number_size <= 8 {
@@ -62,13 +62,13 @@ impl PsbNumber {
 
             stream.read_exact(&mut buf[..number_size as usize])?;
 
-            Ok((1 + number_size as u64, u64::from_le_bytes(buf)))
+            Ok((1 + number_size as u64, i64::from_le_bytes(buf)))
         } else {
             Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
         }
     }
 
-    pub fn get_n(number: u64) -> u8 {
+    pub fn get_n(number: i64) -> u8 {
         if number <= 0 {
             0
         } else if number <= 0xff {
@@ -94,6 +94,7 @@ impl PsbNumber {
         match self {
             PsbNumber::Integer(val) => {
                 let n = Self::get_n(*val);
+
                 Self::write_integer(n, *val, stream)?;
                 Ok(n as u64)
             },
@@ -116,7 +117,7 @@ impl PsbNumber {
         }
     }
 
-    pub fn write_integer(n: u8, number: u64, stream: &mut impl Write) -> Result<u8, PsbError> {
+    pub fn write_integer(n: u8, number: i64, stream: &mut impl Write) -> Result<u8, PsbError> {
         if n > 0 {
             stream.write_all(&number.to_le_bytes()[..n as usize])?;
 
@@ -128,26 +129,26 @@ impl PsbNumber {
 
 }
 
-impl From<u8> for PsbNumber {
-    fn from(number: u8) -> Self {
-        PsbNumber::Integer(number as u64)
+impl From<i8> for PsbNumber {
+    fn from(number: i8) -> Self {
+        PsbNumber::Integer(number as i64)
     }
 }
 
-impl From<u16> for PsbNumber {
-    fn from(number: u16) -> Self {
-        PsbNumber::Integer(number as u64)
+impl From<i16> for PsbNumber {
+    fn from(number: i16) -> Self {
+        PsbNumber::Integer(number as i64)
     }
 }
 
-impl From<u32> for PsbNumber {
-    fn from(number: u32) -> Self {
-        PsbNumber::Integer(number as u64)
+impl From<i32> for PsbNumber {
+    fn from(number: i32) -> Self {
+        PsbNumber::Integer(number as i64)
     }
 }
 
-impl From<u64> for PsbNumber {
-    fn from(number: u64) -> Self {
+impl From<i64> for PsbNumber {
+    fn from(number: i64) -> Self {
         PsbNumber::Integer(number)
     }
 }

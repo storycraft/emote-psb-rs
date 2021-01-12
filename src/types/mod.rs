@@ -15,7 +15,7 @@ use std::io::{Read, Seek, Write};
 use collection::{PsbIntArray, PsbList, PsbObject};
 use number::PsbNumber;
 
-use crate::{PsbError, PsbErrorKind, PsbRefTable};
+use crate::{PsbError, PsbErrorKind, PsbRefs};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
 use self::{reference::PsbReference, string::PsbString};
@@ -65,6 +65,7 @@ pub enum PsbValue {
     IntArray(PsbIntArray),
 
     String(PsbString),
+    StringRef(PsbReference),
 
     List(PsbList),
     Object(PsbObject),
@@ -107,6 +108,12 @@ impl PsbValue {
                 Ok((read + 1, PsbValue::Number(val)))
             },
 
+            _ if value_type > PSB_TYPE_STRING_N && value_type <= PSB_TYPE_STRING_N + 4 => {
+                let (read, string_ref) = PsbReference::from_bytes(value_type - PSB_TYPE_STRING_N, stream)?;
+
+                Ok((read + 1, PsbValue::StringRef(string_ref)))
+            },
+
             _ if value_type >= PSB_TYPE_INTEGER_N && value_type <= PSB_TYPE_INTEGER_N + 8 => {
                 let (read, number) = PsbNumber::from_bytes(value_type, stream)?;
                 Ok((read + 1, PsbValue::Number(number)))
@@ -146,16 +153,10 @@ impl PsbValue {
         Self::from_bytes_type(stream.read_u8()?, stream)
     }
 
-    pub fn from_bytes_table<T: Read + Seek>(stream: &mut T, table: &PsbRefTable) -> Result<(u64, PsbValue), PsbError> {
+    pub fn from_bytes_refs<T: Read + Seek>(stream: &mut T, table: &PsbRefs) -> Result<(u64, PsbValue), PsbError> {
         let value_type = stream.read_u8()?;
 
         match value_type {
-
-            _ if value_type > PSB_TYPE_STRING_N && value_type <= PSB_TYPE_STRING_N + 4 => {
-                let (read, string) = PsbString::from_bytes(value_type - PSB_TYPE_STRING_N, stream, table)?;
-
-                Ok((read + 1, PsbValue::String(string)))
-            },
 
             PSB_TYPE_LIST => {
                 let (read, list) = PsbList::from_bytes(stream, table)?;
@@ -224,8 +225,14 @@ impl PsbValue {
                 Ok(1 + array.write_bytes(stream)?)
             },
 
+            PsbValue::StringRef(string_ref) => {
+                stream.write_u8(PSB_TYPE_STRING_N + string_ref.get_n())?;
+
+                Ok(1 + string_ref.write_bytes(stream)?)
+            },
+
             PsbValue::Resource(res) => {
-                stream.write_u8(PSB_TYPE_EXTRA_N + res.get_n())?;
+                stream.write_u8(PSB_TYPE_RESOURCE_N + res.get_n())?;
 
                 Ok(1 + res.write_bytes(stream)?)
             },
@@ -270,7 +277,7 @@ impl PsbValue {
         }
     }
 
-    pub fn write_bytes_table(&self, stream: &mut impl Write, table: &PsbRefTable) -> Result<u64, PsbError> {
+    pub fn write_bytes_refs(&self, stream: &mut impl Write, table: &PsbRefs) -> Result<u64, PsbError> {
         match &self {
 
             PsbValue::String(string) => {
@@ -281,7 +288,7 @@ impl PsbValue {
                     },
         
                     None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-                }?).max(1);
+                }? as i64).max(1);
                 
                 stream.write_u8(PSB_TYPE_STRING_N + n)?;
 

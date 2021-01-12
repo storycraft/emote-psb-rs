@@ -13,23 +13,23 @@ use super::number::PsbNumber;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PsbReference {
 
-    ref_index: u64
+    ref_index: i64
 
 }
 
 impl PsbReference {
 
-    pub fn new(ref_index: u64) -> Self {
+    pub fn new(ref_index: i64) -> Self {
         Self {
             ref_index
         }
     }
 
-    pub fn ref_index(&self) -> u64 {
+    pub fn ref_index(&self) -> i64 {
         self.ref_index
     }
 
-    pub fn set_index(&mut self, ref_index: u64) {
+    pub fn set_index(&mut self, ref_index: i64) {
         self.ref_index = ref_index;
     }
 
