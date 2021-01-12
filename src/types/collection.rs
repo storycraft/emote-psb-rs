@@ -4,12 +4,11 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-use std::{io::{Read, Seek, SeekFrom, Write}, ops::Index, slice::Iter};
+use std::{collections::{HashMap, hash_map}, io::{Read, Seek, SeekFrom, Write}, ops::Index, slice::Iter};
 
-use crate::{PsbError, PsbErrorKind};
+use crate::{PsbError, PsbErrorKind, PsbRefTable};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use indexmap::{IndexMap, map};
 
 use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue, number::PsbNumber};
 
@@ -148,7 +147,7 @@ impl PsbList {
         self.values
     }
 
-    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbList), PsbError> {
+    pub fn from_bytes<T: Read + Seek>(stream: &mut T, table: &PsbRefTable) -> Result<(u64, PsbList), PsbError> {
         let (offsets_read, ref_offsets) = match PsbValue::from_bytes(stream)? {
     
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
@@ -170,7 +169,7 @@ impl PsbList {
 
         for offset in ref_offsets.iter() {
             stream.seek(SeekFrom::Start(start + *offset))?;
-            let (read, val) = PsbValue::from_bytes(stream)?;
+            let (read, val) = PsbValue::from_bytes_table(stream, table)?;
 
             values.push(val);
 
@@ -184,7 +183,7 @@ impl PsbList {
         Ok((offsets_read + total_read, Self::from(values)))
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
+    pub fn write_bytes(&self, stream: &mut impl Write, table: &PsbRefTable) -> Result<u64, PsbError> {
         let mut offsets = Vec::<u64>::new();
         let mut data_buffer = Vec::<u8>::new();
 
@@ -193,13 +192,37 @@ impl PsbList {
         for value in &self.values {
             offsets.push(total_data_written);
 
-            total_data_written += value.write_bytes(&mut data_buffer)?;
+            total_data_written += value.write_bytes_table(&mut data_buffer, table)?;
         }
 
         let offset_written = PsbValue::IntArray(PsbIntArray::from(offsets)).write_bytes(stream)?;
         stream.write_all(&data_buffer)?;
 
         Ok(offset_written + total_data_written)
+    }
+
+    pub fn collect_strings(&self, vec: &mut Vec<String>) {
+        for child in self.values.iter() {
+            match child {
+
+                PsbValue::Object(child_obj) => {
+                    child_obj.collect_strings(vec);
+                }
+
+                PsbValue::List(child_list) => {
+                    child_list.collect_strings(vec);
+                }
+
+                PsbValue::String(string) => {
+                    if !vec.contains(string.string()) {
+                        vec.push(string.string().clone());
+                    }
+                }
+
+                _ => {}
+            }
+            
+        }
     }
 
 }
@@ -217,8 +240,8 @@ impl From<Vec<PsbValue>> for PsbList {
 #[derive(Debug, PartialEq)]
 pub struct PsbObject {
 
-    // String ref, PsbValue Map
-    map: IndexMap<u64, PsbValue>
+    // key, PsbValue Map
+    map: HashMap<String, PsbValue>
 
 }
 
@@ -226,7 +249,7 @@ impl PsbObject {
 
     pub fn new() -> Self {
         Self {
-            map: IndexMap::new()
+            map: HashMap::new()
         }
     }
 
@@ -234,23 +257,23 @@ impl PsbObject {
         self.map.len()
     }
 
-    pub fn get_value(&self, string_ref: u64) -> Option<&PsbValue> {
-        self.map.get(&string_ref)
+    pub fn get_value(&self, key: String) -> Option<&PsbValue> {
+        self.map.get(&key)
     }
 
-    pub fn map(&self) -> &IndexMap<u64, PsbValue> {
+    pub fn map(&self) -> &HashMap<String, PsbValue> {
         &self.map
     }
 
-    pub fn iter(&self) -> map::Iter<'_, u64, PsbValue>{
+    pub fn iter(&self) -> hash_map::Iter<'_, String, PsbValue>{
         self.map.iter()
     }
 
-    pub fn unwrap(self) -> IndexMap<u64, PsbValue> {
+    pub fn unwrap(self) -> HashMap<String, PsbValue> {
         self.map
     }
 
-    pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, PsbObject), PsbError> {
+    pub fn from_bytes<T: Read + Seek>(stream: &mut T, table: &PsbRefTable) -> Result<(u64, PsbObject), PsbError> {
         let (names_read, name_refs) = match PsbValue::from_bytes(stream)? {
     
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
@@ -273,16 +296,22 @@ impl PsbObject {
 
         let max_offset = ref_offsets.iter().max().unwrap();
 
-        let mut map = IndexMap::<u64, PsbValue>::new();
+        let mut map = HashMap::<String, PsbValue>::new();
 
         let start = stream.seek(SeekFrom::Current(0)).unwrap();
         let mut total_read = 0_u64;
 
         for (name_ref, offset) in name_refs.iter().zip(ref_offsets.iter()) {
             stream.seek(SeekFrom::Start(start + *offset))?;
-            let (read, val) = PsbValue::from_bytes(stream)?;
+            let (read, val) = PsbValue::from_bytes_table(stream, table)?;
+
+            let key = table.names().get(*name_ref as usize);
            
-            map.insert(*name_ref, val);
+            if key.is_none() {
+                return Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None));
+            }
+
+            map.insert(key.unwrap().clone(), val);
 
             if *max_offset == *offset {
                 total_read = read + *offset;
@@ -294,19 +323,34 @@ impl PsbObject {
         Ok((names_read + offsets_read + total_read, Self::from(map)))
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
+    pub fn write_bytes(&self, stream: &mut impl Write, ref_table: &PsbRefTable) -> Result<u64, PsbError> {
+        let mut ref_cache = HashMap::<&String, u64>::new();
+
         let mut name_refs = Vec::<u64>::new();
         let mut offsets = Vec::<u64>::new();
         let mut data_buffer = Vec::<u8>::new();
 
         let mut total_data_written = 0_u64;
 
-        for (name_ref, value) in &self.map {
-            name_refs.push(*name_ref);
+        for (name, value) in &self.map {
+            let name_ref = if ref_cache.contains_key(name) {
+                *ref_cache.get(name).unwrap()
+            } else {
+                match ref_table.find_name_index(name) {
+                    Some(index) => {
+                        ref_cache.insert(name, index);
 
+                        Ok(index)
+                    },
+
+                    None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
+                }?
+            };
+
+            name_refs.push(name_ref);
             offsets.push(total_data_written);
 
-            total_data_written += value.write_bytes(&mut data_buffer)?;
+            total_data_written += value.write_bytes_table(&mut data_buffer, ref_table)?;
         }
 
         let names_written = PsbValue::IntArray(PsbIntArray::from(name_refs)).write_bytes(stream)?;
@@ -317,11 +361,52 @@ impl PsbObject {
         Ok(names_written + offset_written + total_data_written)
     }
 
+    pub fn collect_names(&self, vec: &mut Vec<String>) {
+        for (name, child) in self.map.iter() {
+            match child {
+
+                PsbValue::Object(child_obj) => {
+                    child_obj.collect_names(vec);
+                }
+
+                _ => {}
+            }
+
+            if !vec.contains(&name) {
+                vec.push(name.clone());
+            }
+        }
+    }
+
+    pub fn collect_strings(&self, vec: &mut Vec<String>) {
+        for (_, child) in self.map.iter() {
+            match child {
+
+                PsbValue::Object(child_obj) => {
+                    child_obj.collect_strings(vec);
+                }
+
+                PsbValue::List(child_list) => {
+                    child_list.collect_strings(vec);
+                }
+
+                PsbValue::String(string) => {
+                    if !vec.contains(string.string()) {
+                        vec.push(string.string().clone());
+                    }
+                }
+
+                _ => {}
+            }
+            
+        }
+    }
+
 }
 
-impl From<IndexMap<u64, PsbValue>> for PsbObject {
+impl From<HashMap<String, PsbValue>> for PsbObject {
 
-    fn from(map: IndexMap<u64, PsbValue>) -> Self {
+    fn from(map: HashMap<String, PsbValue>) -> Self {
         Self {
             map
         }

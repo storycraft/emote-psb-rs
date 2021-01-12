@@ -9,15 +9,11 @@ use std::io::{Seek, SeekFrom, Write};
 use adler::Adler32;
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use crate::{PSB_SIGNATURE, PsbError, PsbRefTable, header::PsbHeader, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbIntArray}};
+use crate::{PSB_SIGNATURE, PsbError, PsbRefTable, VirtualPsb, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbIntArray}};
 
 pub struct PsbWriter<T: Write + Seek> {
 
-    pub header: PsbHeader,
-
-    pub ref_table: PsbRefTable,
-
-    pub entry: PsbValue,
+    pub psb: VirtualPsb,
 
     stream: T
 
@@ -26,15 +22,11 @@ pub struct PsbWriter<T: Write + Seek> {
 impl<T: Write + Seek> PsbWriter<T> {
 
     pub fn new(
-        header: PsbHeader,
-        ref_table: PsbRefTable,
-        entry: PsbValue,
+        psb: VirtualPsb,
         stream: T
     ) -> Self {
         Self {
-            header,
-            ref_table,
-            entry,
+            psb,
             stream
         }
     }
@@ -43,8 +35,10 @@ impl<T: Write + Seek> PsbWriter<T> {
     pub fn finish(mut self) -> Result<(u64, T), PsbError> {
         let file_start = self.stream.seek(SeekFrom::Current(0)).unwrap();
 
+        let (header, resources, extra, root) = self.psb.unwrap();
+
         self.stream.write_u32::<LittleEndian>(PSB_SIGNATURE)?;
-        self.header.write_bytes(&mut self.stream)?;
+        header.write_bytes(&mut self.stream)?;
 
         let offsets_end_pos_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start;
         self.stream.write_u32::<LittleEndian>(0)?;
@@ -56,11 +50,11 @@ impl<T: Write + Seek> PsbWriter<T> {
             self.stream.write_u32::<LittleEndian>(0)?;
         }
 
-        if self.header.version > 2 {
+        if header.version > 2 {
             // Checksum prefill
             self.stream.write_u32::<LittleEndian>(0)?;
 
-            if self.header.version > 3 {
+            if header.version > 3 {
                 // Extra prefill
                 self.stream.write_u32::<LittleEndian>(0)?;
                 self.stream.write_u32::<LittleEndian>(0)?;
@@ -81,11 +75,24 @@ impl<T: Write + Seek> PsbWriter<T> {
         let mut extra_lengths_pos = 0_u32;
         let mut extra_data_pos = 0_u32;
 
+        let ref_table = {
+            let mut names = Vec::new();
+            let mut strings = Vec::new();
+
+            root.collect_names(&mut names);
+            root.collect_strings(&mut strings);
+
+            names.sort();
+            strings.sort();
+
+            PsbRefTable::new(names, strings)
+        };
+
         // Names
         {
             let mut buffer_list = Vec::<Vec<u8>>::new();
 
-            for name in self.ref_table.names() {
+            for name in ref_table.names() {
                 buffer_list.push(name.as_bytes().into());
             }
 
@@ -96,7 +103,7 @@ impl<T: Write + Seek> PsbWriter<T> {
         // Root Entry
         {
             entry_point_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
-            self.entry.write_bytes(&mut self.stream)?;
+            PsbValue::Object(root).write_bytes_table(&mut self.stream, &ref_table)?;
         }
 
         // Strings
@@ -104,7 +111,7 @@ impl<T: Write + Seek> PsbWriter<T> {
             let mut offset_list = Vec::<u64>::new();
 
             let mut total_len = 0_u64;
-            for string in self.ref_table.strings().iter() {
+            for string in ref_table.strings().iter() {
                 let len = string.as_bytes().len() as u64;
                 
                 offset_list.push(total_len);
@@ -116,7 +123,7 @@ impl<T: Write + Seek> PsbWriter<T> {
             PsbValue::IntArray(PsbIntArray::from(offset_list)).write_bytes(&mut self.stream)?;
 
             string_data_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
-            for string in self.ref_table.strings().iter() {
+            for string in ref_table.strings().iter() {
                 self.stream.write_all(string.as_bytes())?;
                 self.stream.write_u8(0)?;
             }
@@ -128,7 +135,7 @@ impl<T: Write + Seek> PsbWriter<T> {
             let mut length_list = Vec::<u64>::new();
 
             let mut total_len = 0_u64;
-            for res in self.ref_table.resources().iter() {
+            for res in resources.iter() {
                 let len = res.len() as u64;
 
                 offset_list.push(total_len);
@@ -144,18 +151,18 @@ impl<T: Write + Seek> PsbWriter<T> {
             PsbValue::IntArray(PsbIntArray::from(length_list)).write_bytes(&mut self.stream)?;
 
             resource_data_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
-            for res in self.ref_table.resources().iter() {
+            for res in resources.iter() {
                 self.stream.write_all(res)?;
             }
         }
 
         // Extra resources support from 4
-        if self.header.version > 3 {
+        if header.version > 3 {
             let mut offset_list = Vec::<u64>::new();
             let mut length_list = Vec::<u64>::new();
 
             let mut total_len = 0_u64;
-            for res in self.ref_table.extra().iter() {
+            for res in extra.iter() {
                 let len = res.len() as u64;
 
                 offset_list.push(total_len);
@@ -171,7 +178,7 @@ impl<T: Write + Seek> PsbWriter<T> {
             PsbValue::IntArray(PsbIntArray::from(length_list)).write_bytes(&mut self.stream)?;
 
             extra_data_pos = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
-            for res in self.ref_table.extra().iter() {
+            for res in extra.iter() {
                 self.stream.write_all(res)?;
             }
         }
@@ -191,7 +198,7 @@ impl<T: Write + Seek> PsbWriter<T> {
         self.stream.write_u32::<LittleEndian>(resource_lengths_pos)?;
         self.stream.write_u32::<LittleEndian>(resource_data_pos)?;
         self.stream.write_u32::<LittleEndian>(entry_point_pos)?;
-        if self.header.version > 2 {
+        if header.version > 2 {
             let mut adler = Adler32::new();
 
             adler.write_slice(&(offset_start_pos as u32).to_le_bytes());
@@ -205,7 +212,7 @@ impl<T: Write + Seek> PsbWriter<T> {
 
             self.stream.write_u32::<LittleEndian>(adler.checksum())?;
 
-            if self.header.version > 3 {
+            if header.version > 3 {
                 self.stream.write_u32::<LittleEndian>(extra_offset_pos)?;
                 self.stream.write_u32::<LittleEndian>(extra_lengths_pos)?;
                 self.stream.write_u32::<LittleEndian>(extra_data_pos)?;

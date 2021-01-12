@@ -47,38 +47,58 @@ impl<T: Default + Clone> SafeIndexVec<T> {
 
 }
 
-pub struct XorStream<T> {
+pub struct XorShiftStream<T> {
 
     stream: T,
-    key: [u8; 4]
+
+    read_seeds: [u32; 4],
+    write_seeds: [u32; 4]
 
 }
 
-impl<T> XorStream<T> {
+impl<T> XorShiftStream<T> {
 
-    pub fn new(stream: T, key: u32) -> Self {
+    pub fn new(stream: T, seeds: [u32; 4]) -> Self {
         Self {
-            stream, key: key.to_le_bytes()
+            stream, read_seeds: seeds, write_seeds: seeds
         }
     }
 
-    pub fn key(&self) -> u32 {
-        u32::from_le_bytes(self.key)
+    pub fn new_emote(stream: T, key: u32) -> Self {
+        Self::new(stream, [123456789, 362436069, 521288629, key])
     }
 
-    pub fn unwrap(self) -> T {
-        self.stream
+    fn next_read(&mut self) -> u32 {
+        Self::next(&mut self.read_seeds)
+    }
+
+    fn next_write(&mut self) -> u32 {
+        Self::next(&mut self.write_seeds)
+    }
+
+    fn next(seeds: &mut [u32; 4]) -> u32 {
+        let x = seeds[0] ^ (seeds[0] << 11);
+
+        seeds[0] = seeds[1];
+        seeds[1] = seeds[2];
+        seeds[2] = seeds[3];
+
+        seeds[3] = (seeds[3] ^ (seeds[3] >> 19)) ^ (x ^ (x >> 8));
+
+        seeds[3]
     }
 
 }
 
-impl<T: Write + Seek> Write for XorStream<T> {
+impl<T: Write + Seek> Write for XorShiftStream<T> {
 
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let current = self.stream.seek(SeekFrom::Current(0)).unwrap() as usize;
 
+        let arr = self.next_write().to_le_bytes();
+
         self.stream.write(
-            &buf.iter().enumerate().map(|(i, &val)| val ^ self.key[(current + i) % 4]).collect::<Vec<u8>>()
+            &buf.iter().enumerate().map(|(i, &val)| val ^ arr[(current + i) % 4]).collect::<Vec<u8>>()
         )
     }
 
@@ -88,15 +108,16 @@ impl<T: Write + Seek> Write for XorStream<T> {
 
 }
 
-impl<T: Read + Seek> Read for XorStream<T> {
+impl<T: Read + Seek> Read for XorShiftStream<T> {
 
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let current = self.stream.seek(SeekFrom::Current(0)).unwrap() as usize;
         
         let read = self.stream.read(buf)?;
+        let arr = self.next_read().to_le_bytes();
 
         for i in 0..read {
-            buf[i] ^= self.key[(current + i) % 4];
+            buf[i] ^= arr[(current + i) % 4];
         }
 
         Ok(read)
