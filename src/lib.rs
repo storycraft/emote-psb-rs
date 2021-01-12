@@ -383,14 +383,3 @@ impl<T: Read + Seek> PsbFile<T> {
     }
 
 }
-
-#[cfg(test)]
-#[test]
-fn test() {
-    let input = std::fs::File::open("01_com_001_01.ks.scn").unwrap();
-
-    let mut psb_file = PsbReader::open_psb(input).unwrap();
-    let psb = psb_file.load().unwrap();
-
-    println!("Loaded: {:?}", psb)
-}
