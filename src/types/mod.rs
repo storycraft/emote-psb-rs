@@ -281,7 +281,7 @@ impl PsbValue {
                     },
         
                     None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-                }?);
+                }?).max(1);
                 
                 stream.write_u8(PSB_TYPE_STRING_N + n)?;
 

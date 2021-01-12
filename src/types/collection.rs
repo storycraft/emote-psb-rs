@@ -225,6 +225,24 @@ impl PsbList {
         }
     }
 
+    pub fn collect_names(&self, vec: &mut Vec<String>) {
+        for child in self.values.iter() {
+            match child {
+
+                PsbValue::Object(child_obj) => {
+                    child_obj.collect_names(vec);
+                }
+
+                PsbValue::List(child_list) => {
+                    child_list.collect_names(vec);
+                }
+
+                _ => {}
+            }
+            
+        }
+    }
+
 }
 
 impl From<Vec<PsbValue>> for PsbList {
@@ -367,6 +385,10 @@ impl PsbObject {
 
                 PsbValue::Object(child_obj) => {
                     child_obj.collect_names(vec);
+                }
+
+                PsbValue::List(child_list) => {
+                    child_list.collect_names(vec);
                 }
 
                 _ => {}

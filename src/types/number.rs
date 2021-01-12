@@ -40,7 +40,7 @@ impl PsbNumber {
 
             _ if number_type >= PSB_TYPE_INTEGER_N && number_type <= PSB_TYPE_INTEGER_N + 8 => {
                 let number_size = number_type - PSB_TYPE_INTEGER_N;
-                
+
                 let (read, val) = Self::read_integer(number_size, stream)?;
 
                 Ok((read, Self::Integer(val)))
