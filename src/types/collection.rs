@@ -50,15 +50,15 @@ impl PsbUintArray {
 
     /// Item byte size
     pub fn get_item_n(&self) -> u8 {
-        PsbNumber::get_n(self.vec.iter().max().unwrap().clone())
+        PsbNumber::get_uint_n(self.vec.iter().max().unwrap().clone())
     }
 
     pub fn get_n(&self) -> u8 {
-        PsbNumber::get_n(self.vec.len() as u64).max(1)
+        PsbNumber::get_uint_n(self.vec.len() as u64).max(1)
     }
 
     pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, PsbUintArray), PsbError> {
-        let (count_read, item_count) = PsbNumber::read_integer(n, stream)?;
+        let (count_read, item_count) = PsbNumber::read_uint(n, stream)?;
 
         let item_byte_size = stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N;
 
@@ -66,7 +66,7 @@ impl PsbUintArray {
 
         let mut item_total_read = 0_u64;
         for _ in 0..item_count {
-            let (item_read, item) = PsbNumber::read_integer(item_byte_size, stream)?;
+            let (item_read, item) = PsbNumber::read_uint(item_byte_size, stream)?;
             list.push(item as u64);
 
             item_total_read += item_read;
@@ -76,9 +76,9 @@ impl PsbUintArray {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
-        let len = self.vec.len() as i64;
+        let len = self.vec.len() as u64;
 
-        let count_written = PsbNumber::write_integer(self.get_n(), len, stream)? as u64;
+        let count_written = PsbNumber::write_uint(self.get_n(), len, stream)? as u64;
 
         if len < 1 {
             stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + 0)?;
@@ -89,7 +89,7 @@ impl PsbUintArray {
             stream.write_u8(n + PSB_TYPE_INTEGER_ARRAY_N)?;
 
             for num in &self.vec {
-                stream.write_all(&num.to_le_bytes()[..n as usize])?;
+                PsbNumber::write_uint(n, *num, stream)?;
             }
 
             Ok(1 + count_written + n as u64 * self.vec.len() as u64)

@@ -34,17 +34,17 @@ impl PsbReference {
     }
 
     pub fn get_n(&self) -> u8 {
-        PsbNumber::get_n(self.ref_index).max(1)
+        PsbNumber::get_uint_n(self.ref_index).max(1)
     }
 
     pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
-        let (ref_index_read, ref_index) = PsbNumber::read_integer(n, stream)?;
+        let (ref_index_read, ref_index) = PsbNumber::read_uint(n, stream)?;
 
         Ok((ref_index_read, Self::new(ref_index as u64)))
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
-        Ok(PsbNumber::write_integer(self.get_n(), self.ref_index as i64, stream)? as u64)
+        Ok(PsbNumber::write_uint(self.get_n(), self.ref_index, stream)? as u64)
     }
 
 }

@@ -199,7 +199,7 @@ impl PsbValue {
             PsbValue::Number(number) => {
                 match number {
                     PsbNumber::Integer(integer) => {
-                        let n = PsbNumber::get_n(*integer as u64);
+                        let n = PsbNumber::get_n(*integer);
                         stream.write_u8(PSB_TYPE_INTEGER_N + n)?;
                     },
 
@@ -281,7 +281,7 @@ impl PsbValue {
         match &self {
 
             PsbValue::String(string) => {
-                let n = PsbNumber::get_n(match table.find_string_index(string.string()) {
+                let n = PsbNumber::get_uint_n(match table.find_string_index(string.string()) {
 
                     Some(ref_index) => {
                         Ok(ref_index)

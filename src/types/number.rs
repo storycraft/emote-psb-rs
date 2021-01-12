@@ -53,8 +53,8 @@ impl PsbNumber {
         }
     }
 
-    /// Read integer with given size.
-    pub fn read_integer(number_size: u8, stream: &mut impl Read) -> Result<(u64, i64), PsbError> {
+    /// Read uint with given size.
+    pub fn read_uint(number_size: u8, stream: &mut impl Read) -> Result<(u64, u64), PsbError> {
         if number_size == 0 {
             Ok((1, 0))
         } else if number_size <= 8 {
@@ -62,13 +62,58 @@ impl PsbNumber {
 
             stream.read_exact(&mut buf[..number_size as usize])?;
 
-            Ok((number_size as u64, i64::from_le_bytes(buf)))
+            Ok((number_size as u64, u64::from_le_bytes(buf)))
         } else {
             Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
         }
     }
 
-    pub fn get_n(number: u64) -> u8 {
+    pub fn read_integer(number_size: u8, stream: &mut impl Read) -> Result<(u64, i64), PsbError> {
+        if number_size == 0 {
+            Ok((1, 0))
+        } else if number_size <= 8 {
+            let (read, unsigned) = Self::read_uint(number_size, stream)?;
+
+            let max = 1_u64 << (number_size * 8);
+            let number = if unsigned >= (max >> 1) {
+                -((max - unsigned) as i64)
+            } else {
+                unsigned as i64
+            };
+
+            Ok((read, number))
+        } else {
+            Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
+        }
+    }
+
+    pub fn get_n(number: i64) -> u8 {
+        if number >= 0 {
+            if number == 0 {
+                0
+            } else if number <= 0x7f {
+                1
+            } else if number <= 0x7fff {
+                2
+            } else if number <= 0x7fffff {
+                3
+            } else if number <= 0x7fffffff {
+                4
+            } else if number <= 0x7fffffffff {
+                5
+            } else if number <= 0x7fffffffffff {
+                6
+            } else if number <= 0x7fffffffffffff {
+                7
+            } else {
+                8
+            }
+        } else {
+            Self::get_n((0xffffffffffffffff - number as u64) as i64)
+        }
+    }
+
+    pub fn get_uint_n(number: u64) -> u8 {
         if number <= 0 {
             0
         } else if number <= 0xff {
@@ -93,8 +138,8 @@ impl PsbNumber {
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         match self {
             PsbNumber::Integer(val) => {
-                let n = Self::get_n(*val as u64);
-
+                let n = Self::get_n(*val);
+                
                 Self::write_integer(n, *val, stream)?;
                 Ok(n as u64)
             },
@@ -117,14 +162,30 @@ impl PsbNumber {
         }
     }
 
-    pub fn write_integer(n: u8, number: i64, stream: &mut impl Write) -> Result<u8, PsbError> {
+    pub fn write_uint(n: u8, number: u64, stream: &mut impl Write) -> Result<u8, PsbError> {
         if n > 0 {
             stream.write_all(&number.to_le_bytes()[..n as usize])?;
 
-            return Ok(n);
+            Ok(n)
+        } else {
+            Ok(0)
         }
+    }
 
-        Ok(0)
+    pub fn write_integer(n: u8, number: i64, stream: &mut impl Write) -> Result<u8, PsbError> {
+        if n > 0 {
+            if number < 0 {
+                Self::write_uint(n, 0xffffffffffffffff - number as u64, stream)
+            } else {
+                if n < 8 && number as u64 >= (1_u64 << (n * 8 - 1)) {
+                    Self::write_uint(n + 1, number as u64, stream)
+                } else {
+                    Self::write_uint(n, number as u64, stream)
+                }
+            }
+        } else {
+            Ok(0)
+        }
     }
 
 }
