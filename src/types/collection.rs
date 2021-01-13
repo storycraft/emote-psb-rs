@@ -81,7 +81,7 @@ impl PsbUintArray {
         let count_written = PsbNumber::write_uint(self.get_n(), len, stream)? as u64;
 
         if len < 1 {
-            stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + 0)?;
+            stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + 1)?;
             Ok(1 + count_written)
         } else {
             let n = self.get_item_n();
