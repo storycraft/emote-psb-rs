@@ -72,7 +72,7 @@ impl PsbUintArray {
             item_total_read += item_read;
         }
 
-        Ok((count_read + item_total_read, PsbUintArray::from(list)))
+        Ok((count_read + item_total_read + 1, PsbUintArray::from(list)))
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
