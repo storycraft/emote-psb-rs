@@ -87,48 +87,30 @@ impl PsbNumber {
         }
     }
 
-    pub fn get_n(number: i64) -> u8 {
-        if number >= 0 {
-            if number == 0 {
-                0
-            } else if number <= 0x7f {
-                1
-            } else if number <= 0x7fff {
-                2
-            } else if number <= 0x7fffff {
-                3
-            } else if number <= 0x7fffffff {
-                4
-            } else if number <= 0x7fffffffff {
-                5
-            } else if number <= 0x7fffffffffff {
-                6
-            } else if number <= 0x7fffffffffffff {
-                7
-            } else {
-                8
-            }
-        } else {
-            Self::get_n((0xffffffffffffffff - number as u64) as i64)
+    pub fn get_n(mut number: i64) -> u8 {
+        if number < 0 {
+            number = !number + 1;
         }
+        
+        Self::get_uint_n(number as u64)
     }
 
     pub fn get_uint_n(number: u64) -> u8 {
-        if number <= 0 {
+        if number == 0 {
             0
-        } else if number <= 0xff {
+        } else if number <= 0x7f {
             1
-        } else if number <= 0xffff {
+        } else if number <= 0x7fff {
             2
-        } else if number <= 0xffffff {
+        } else if number <= 0x7fffff {
             3
-        } else if number <= 0xffffffff {
+        } else if number <= 0x7fffffff {
             4
-        } else if number <= 0xffffffffff {
+        } else if number <= 0x7fffffffff {
             5
-        } else if number <= 0xffffffffffff {
+        } else if number <= 0x7fffffffffff {
             6
-        } else if number <= 0xffffffffffffff {
+        } else if number <= 0x7fffffffffffff {
             7
         } else {
             8
@@ -173,15 +155,7 @@ impl PsbNumber {
     }
 
     pub fn write_integer(n: u8, number: i64, stream: &mut impl Write) -> Result<u8, PsbError> {
-        if n > 0 {
-            if number < 0 {
-                Self::write_uint(n, 0xffffffffffffffff - number as u64, stream)
-            } else {
-                Self::write_uint(n, number as u64, stream)
-            }
-        } else {
-            Ok(0)
-        }
+        Self::write_uint(n, number as u64, stream)
     }
 
 }
