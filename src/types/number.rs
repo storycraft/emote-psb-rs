@@ -177,11 +177,7 @@ impl PsbNumber {
             if number < 0 {
                 Self::write_uint(n, 0xffffffffffffffff - number as u64, stream)
             } else {
-                if n < 8 && number as u64 >= (1_u64 << (n * 8 - 1)) {
-                    Self::write_uint(n + 1, number as u64, stream)
-                } else {
-                    Self::write_uint(n, number as u64, stream)
-                }
+                Self::write_uint(n, number as u64, stream)
             }
         } else {
             Ok(0)
