@@ -1,6 +1,6 @@
 [package]
 name = "emote-psb"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["storycraft <storycraft@pancake.sh>"]
 description = "E-mote PSB file"
 edition = "2018"

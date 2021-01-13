@@ -11,11 +11,25 @@ use byteorder::{LittleEndian, WriteBytesExt};
 
 use crate::{PSB_SIGNATURE, PsbError, PsbRefs, VirtualPsb, offsets::{PsbOffsets, PsbResourcesOffset, PsbStringOffset}, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbUintArray}};
 
-pub struct PsbWriter<T: Write + Seek> {
+pub struct PsbWriter<T : Write> {
 
     pub psb: VirtualPsb,
 
     stream: T
+
+}
+
+impl<T: Write> PsbWriter<T> {
+
+    pub fn write_names(names: &Vec<String>, stream: &mut T) -> Result<u64, PsbError> {
+        let mut buffer_list = Vec::<Vec<u8>>::new();
+
+        for name in names.iter() {
+            buffer_list.push(name.as_bytes().into());
+        }
+
+        PsbBinaryTree::from(buffer_list).write_bytes(stream)
+    }
 
 }
 
@@ -125,7 +139,7 @@ impl<T: Write + Seek> PsbWriter<T> {
     }
 
     /// Write resources. Returns written size, PsbResourcesOffset tuple
-    pub fn write_resources<W: Write + Seek>(resources: &Vec<Vec<u8>>, stream: &mut W) -> Result<(u64, PsbResourcesOffset), PsbError> {
+    pub fn write_resources(resources: &Vec<Vec<u8>>, stream: &mut T) -> Result<(u64, PsbResourcesOffset), PsbError> {
         let mut offset_list = Vec::<u64>::new();
         let mut length_list = Vec::<u64>::new();
 
@@ -159,18 +173,8 @@ impl<T: Write + Seek> PsbWriter<T> {
         }))
     }
 
-    pub fn write_names(names: &Vec<String>, stream: &mut impl Write) -> Result<u64, PsbError> {
-        let mut buffer_list = Vec::<Vec<u8>>::new();
-
-        for name in names.iter() {
-            buffer_list.push(name.as_bytes().into());
-        }
-
-        PsbBinaryTree::from(buffer_list).write_bytes(stream)
-    }
-
     /// Write strings. Returns written size, PsbStringOffset tuple
-    pub fn write_strings<W: Write + Seek>(strings: &Vec<String>, stream: &mut W) -> Result<(u64, PsbStringOffset), PsbError> {
+    pub fn write_strings(strings: &Vec<String>, stream: &mut T) -> Result<(u64, PsbStringOffset), PsbError> {
         let mut offset_list = Vec::<u64>::new();
 
         let mut total_len = 0_u64;
