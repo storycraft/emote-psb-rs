@@ -4,14 +4,15 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom, Write};
 
 use adler::Adler32;
 use byteorder::{LittleEndian, WriteBytesExt};
+use flate2::{Compression, bufread::ZlibEncoder};
 
-use crate::{PSB_SIGNATURE, PsbError, PsbRefs, VirtualPsb, offsets::{PsbOffsets, PsbResourcesOffset, PsbStringOffset}, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbUintArray}};
+use crate::{PSB_MDF_SIGNATURE, PSB_SIGNATURE, PsbError, PsbRefs, VirtualPsb, header::MdfHeader, offsets::{PsbOffsets, PsbResourcesOffset, PsbStringOffset}, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbUintArray}};
 
-pub struct PsbWriter<T : Write> {
+pub struct PsbWriter<T> {
 
     pub psb: VirtualPsb,
 
@@ -46,10 +47,10 @@ impl<T: Write + Seek> PsbWriter<T> {
     }
 
     /// Write file and finish stream
-    pub fn finish(mut self) -> Result<(u64, T), PsbError> {
+    pub fn finish(mut self) -> Result<u64, PsbError> {
         let file_start = self.stream.seek(SeekFrom::Current(0)).unwrap();
 
-        let (header, mut strings, resources, extra, root) = self.psb.unwrap();
+        let (header, resources, extra, root) = self.psb.unwrap();
 
         self.stream.write_u32::<LittleEndian>(PSB_SIGNATURE)?;
         header.write_bytes(&mut self.stream)?;
@@ -68,12 +69,13 @@ impl<T: Write + Seek> PsbWriter<T> {
 
         let refs = {
             let mut names = Vec::new();
+            let mut strings = Vec::new();
 
             root.collect_names(&mut names);
             root.collect_strings(&mut strings);
 
             names.sort();
-            // strings.sort();
+            strings.sort();
 
             PsbRefs::new(names, strings)
         };
@@ -135,7 +137,7 @@ impl<T: Write + Seek> PsbWriter<T> {
 
         self.stream.seek(SeekFrom::Start(file_end))?;
 
-        Ok((file_end - file_start, self.stream))
+        Ok(file_end - file_start)
     }
 
     /// Write resources. Returns written size, PsbResourcesOffset tuple
@@ -201,4 +203,79 @@ impl<T: Write + Seek> PsbWriter<T> {
         }))
     }
 
+}
+
+pub struct MdfWriter<R, W> {
+
+    read: R,
+    stream: W
+
+}
+
+impl<R: Read, W: Write + Seek> MdfWriter<R, W> {
+
+    pub fn new(read: R, stream: W) -> Self {
+        Self {
+            read,
+            stream
+        }
+    }
+
+    /// Write mdf file.
+    /// Returns written size
+    pub fn finish(mut self) -> Result<u64, PsbError> {
+        let mut reader = BufReader::new(self.read);
+
+        let mut encoder = ZlibEncoder::new(&mut reader, Compression::best());
+
+        // Write signature first
+        self.stream.write_u32::<LittleEndian>(PSB_MDF_SIGNATURE)?;
+
+        let header_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
+        // Prefill header
+        MdfHeader { size: 0 }.write_bytes(&mut self.stream)?;
+        
+        io::copy(&mut encoder, &mut self.stream)?;
+        let total_out = encoder.total_out();
+
+        let end_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
+
+        // Fill header
+        self.stream.seek(SeekFrom::Start(header_pos)).unwrap();
+        MdfHeader { size: total_out as u32 }.write_bytes(&mut self.stream)?;
+
+        self.stream.seek(SeekFrom::Start(end_pos)).unwrap();
+        Ok(total_out + 8)
+    }
+
+}
+
+pub struct PsbMdfWriter<T> {
+
+    buffer: Cursor<Vec<u8>>,
+    psb: VirtualPsb,
+    stream: T
+
+}
+
+impl<T: Write + Seek> PsbMdfWriter<T> {
+
+    pub fn new(psb: VirtualPsb, stream: T) -> Self {
+        Self {
+            buffer: Default::default(),
+            psb,
+            stream
+        }
+    }
+
+    /// Write mdf file.
+    /// Returns written size
+    pub fn finish(mut self) -> Result<u64, PsbError> {
+        let psb_writer = PsbWriter::new(self.psb, &mut self.buffer);
+        psb_writer.finish()?;
+
+        let mdf_writer = MdfWriter::new(self.buffer, self.stream);
+
+        mdf_writer.finish()
+    }
 }

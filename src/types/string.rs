@@ -8,10 +8,10 @@ use std::io::{Read, Write};
 
 use crate::{PsbError, PsbErrorKind, PsbRefs};
 
-use super::reference::PsbStringRef;
-
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
+
+use super::reference::PsbStringRef;
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

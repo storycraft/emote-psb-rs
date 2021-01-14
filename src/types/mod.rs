@@ -14,7 +14,7 @@ use std::io::{Read, Seek, Write};
 
 use collection::{PsbUintArray, PsbList, PsbObject};
 use number::PsbNumber;
-use reference::{PsbExtraRef, PsbStringRef};
+use reference::PsbExtraRef;
 
 use crate::{PsbError, PsbErrorKind, PsbRefs};
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -71,7 +71,6 @@ pub enum PsbValue {
     IntArray(PsbUintArray),
 
     String(PsbString),
-    StringRef(PsbStringRef),
 
     List(PsbList),
     Object(PsbObject),
@@ -112,12 +111,6 @@ impl PsbValue {
             PSB_TYPE_FLOAT => {
                 let (read, val) = PsbNumber::from_bytes(value_type, stream)?;
                 Ok((read + 1, PsbValue::Number(val)))
-            },
-
-            _ if value_type > PSB_TYPE_STRING_N && value_type <= PSB_TYPE_STRING_N + 4 => {
-                let (read, string_ref) = PsbStringRef::from_bytes(value_type - PSB_TYPE_STRING_N, stream)?;
-
-                Ok((read + 1, PsbValue::StringRef(string_ref)))
             },
 
             _ if value_type >= PSB_TYPE_INTEGER_N && value_type <= PSB_TYPE_INTEGER_N + 8 => {
@@ -174,6 +167,12 @@ impl PsbValue {
                 let (read, map) = PsbObject::from_bytes(stream, table)?;
 
                 Ok((read + 1, PsbValue::Object(map)))
+            },
+
+            _ if value_type > PSB_TYPE_STRING_N && value_type <= PSB_TYPE_STRING_N + 4 => {
+                let (read, string) = PsbString::from_bytes(value_type - PSB_TYPE_STRING_N, stream, table)?;
+
+                Ok((read + 1, PsbValue::String(string)))
             },
 
             _ => {
@@ -234,12 +233,6 @@ impl PsbValue {
                 stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + array.get_n())?;
 
                 Ok(1 + array.write_bytes(stream)?)
-            },
-
-            PsbValue::StringRef(string_ref) => {
-                stream.write_u8(PSB_TYPE_STRING_N + string_ref.get_n())?;
-
-                Ok(1 + string_ref.write_bytes(stream)?)
             },
 
             PsbValue::Resource(res) => {

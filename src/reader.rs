@@ -16,26 +16,6 @@ pub struct PsbReader;
 
 impl PsbReader {
 
-    pub fn open_mdf<T: Read + Seek>(mut stream: T) -> Result<PsbFile<Cursor<Vec<u8>>>, PsbError> {
-        let signature = stream.read_u32::<LittleEndian>()?;
-        if signature != PSB_MDF_SIGNATURE {
-            return Err(PsbError::new(PsbErrorKind::InvalidFile, None));
-        }
-
-        let (_, mdf_header) = MdfHeader::from_bytes(&mut stream)?;
-
-        let mut compressed_buffer = Vec::new();
-
-        stream.take(mdf_header.size as u64).read_to_end(&mut compressed_buffer)?;
-
-        let mut decoder = ZlibDecoder::new(&compressed_buffer[..]);
-
-        let mut buffer = Vec::new();
-        decoder.read_to_end(&mut buffer)?;
-
-        Self::open_psb(Cursor::new(buffer))
-    }
-
     /// Read as PsbFile
     pub fn open_psb<T: Read + Seek>(mut stream: T) -> Result<PsbFile<T>, PsbError> {
         let start = stream.seek(SeekFrom::Current(0)).unwrap();
@@ -111,6 +91,32 @@ impl PsbReader {
         }
 
         Ok((offsets_read + read as u64, strings))
+    }
+
+}
+
+pub struct MdfReader;
+
+impl MdfReader {
+    
+    pub fn open_mdf<T: Read + Seek>(mut stream: T) -> Result<PsbFile<Cursor<Vec<u8>>>, PsbError> {
+        let signature = stream.read_u32::<LittleEndian>()?;
+        if signature != PSB_MDF_SIGNATURE {
+            return Err(PsbError::new(PsbErrorKind::InvalidFile, None));
+        }
+
+        let (_, mdf_header) = MdfHeader::from_bytes(&mut stream)?;
+
+        let mut compressed_buffer = Vec::new();
+
+        stream.take(mdf_header.size as u64).read_to_end(&mut compressed_buffer)?;
+
+        let mut decoder = ZlibDecoder::new(&compressed_buffer[..]);
+
+        let mut buffer = Vec::new();
+        decoder.read_to_end(&mut buffer)?;
+
+        PsbReader::open_psb(Cursor::new(buffer))
     }
 
 }

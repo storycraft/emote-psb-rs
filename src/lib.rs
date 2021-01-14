@@ -160,7 +160,6 @@ pub struct VirtualPsb {
 
     header: PsbHeader,
 
-    strings: Vec<String>,
     resources: Vec<Vec<u8>>,
     extra: Vec<Vec<u8>>,
 
@@ -172,14 +171,12 @@ impl VirtualPsb {
 
     pub fn new(
         header: PsbHeader,
-        strings: Vec<String>,
         resources: Vec<Vec<u8>>,
         extra: Vec<Vec<u8>>,
         root: PsbObject
     ) -> Self {
         Self {
             header,
-            strings,
             resources,
             extra,
             root
@@ -196,14 +193,6 @@ impl VirtualPsb {
 
     pub fn resources_mut(&mut self) -> &mut Vec<Vec<u8>> {
         &mut self.resources
-    }
-
-    pub fn strings(&self) -> &Vec<String> {
-        &self.strings
-    }
-
-    pub fn strings_mut(&mut self) -> &mut Vec<String> {
-        &mut self.strings
     }
 
     pub fn extra(&self) -> &Vec<Vec<u8>> {
@@ -226,10 +215,9 @@ impl VirtualPsb {
         self.root = root;
     }
 
-    pub fn unwrap(self) -> (PsbHeader, Vec<String>, Vec<Vec<u8>>, Vec<Vec<u8>>, PsbObject) {
+    pub fn unwrap(self) -> (PsbHeader, Vec<Vec<u8>>, Vec<Vec<u8>>, PsbObject) {
         (
             self.header,
-            self.strings,
             self.resources,
             self.extra,
             self.root
@@ -347,7 +335,7 @@ impl<T: Read + Seek> PsbFile<T> {
         let res = self.load_resources()?;
         let extra = self.load_extra()?;
 
-        Ok(VirtualPsb::new(self.header, self.refs.strings.clone(), res, extra, root))
+        Ok(VirtualPsb::new(self.header, res, extra, root))
     }
 
     /// Unwrap stream

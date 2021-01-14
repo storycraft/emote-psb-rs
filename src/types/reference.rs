@@ -66,7 +66,6 @@ impl PsbExtraRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PsbStringRef {
 
     pub string_ref: u64
