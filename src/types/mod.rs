@@ -14,11 +14,15 @@ use std::io::{Read, Seek, Write};
 
 use collection::{PsbUintArray, PsbList, PsbObject};
 use number::PsbNumber;
+use reference::{PsbExtraRef, PsbStringRef};
 
 use crate::{PsbError, PsbErrorKind, PsbRefs};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
-use self::{reference::PsbReference, string::PsbString};
+use self::{reference::PsbResourceRef, string::PsbString};
+
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 
 pub const PSB_TYPE_NONE: u8 = 0x00;
 
@@ -57,6 +61,8 @@ pub const PSB_COMPILER_BOOL: u8 = 0x85;
 pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(untagged))]
 pub enum PsbValue {
 
     None, Null,
@@ -65,13 +71,13 @@ pub enum PsbValue {
     IntArray(PsbUintArray),
 
     String(PsbString),
-    StringRef(PsbReference),
+    StringRef(PsbStringRef),
 
     List(PsbList),
     Object(PsbObject),
 
-    Resource(PsbReference),
-    ExtraResource(PsbReference),
+    Resource(PsbResourceRef),
+    ExtraResource(PsbExtraRef),
 
     CompilerNumber,
     CompilerString,
@@ -109,7 +115,7 @@ impl PsbValue {
             },
 
             _ if value_type > PSB_TYPE_STRING_N && value_type <= PSB_TYPE_STRING_N + 4 => {
-                let (read, string_ref) = PsbReference::from_bytes(value_type - PSB_TYPE_STRING_N, stream)?;
+                let (read, string_ref) = PsbStringRef::from_bytes(value_type - PSB_TYPE_STRING_N, stream)?;
 
                 Ok((read + 1, PsbValue::StringRef(string_ref)))
             },
@@ -125,13 +131,13 @@ impl PsbValue {
             },
 
             _ if value_type > PSB_TYPE_RESOURCE_N && value_type <= PSB_TYPE_RESOURCE_N + 4 => {
-                let (read, map) = PsbReference::from_bytes(value_type - PSB_TYPE_RESOURCE_N, stream)?;
+                let (read, map) = PsbResourceRef::from_bytes(value_type - PSB_TYPE_RESOURCE_N, stream)?;
 
                 Ok((read + 1, PsbValue::Resource(map)))
             },
 
             _ if value_type > PSB_TYPE_EXTRA_N && value_type <= PSB_TYPE_EXTRA_N + 4 => {
-                let (read, map) = PsbReference::from_bytes(value_type - PSB_TYPE_EXTRA_N, stream)?;
+                let (read, map) = PsbExtraRef::from_bytes(value_type - PSB_TYPE_EXTRA_N, stream)?;
 
                 Ok((read + 1, PsbValue::ExtraResource(map)))
             },

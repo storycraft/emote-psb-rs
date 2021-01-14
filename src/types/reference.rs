@@ -10,41 +10,83 @@ use crate::PsbError;
 
 use super::number::PsbNumber;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PsbReference {
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 
-    ref_index: u64
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct PsbResourceRef {
+
+    pub resource_ref: u64
 
 }
 
-impl PsbReference {
-
-    pub fn new(ref_index: u64) -> Self {
-        Self {
-            ref_index
-        }
-    }
-
-    pub fn ref_index(&self) -> u64 {
-        self.ref_index
-    }
-
-    pub fn set_index(&mut self, ref_index: u64) {
-        self.ref_index = ref_index;
-    }
+impl PsbResourceRef {
 
     pub fn get_n(&self) -> u8 {
-        PsbNumber::get_uint_n(self.ref_index)
+        PsbNumber::get_uint_n(self.resource_ref)
     }
 
     pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
-        let (ref_index_read, ref_index) = PsbNumber::read_uint(n, stream)?;
+        let (ref_read, refernece) = PsbNumber::read_uint(n, stream)?;
 
-        Ok((ref_index_read, Self::new(ref_index as u64)))
+        Ok((ref_read, Self { resource_ref: refernece as u64 }))
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
-        Ok(PsbNumber::write_uint(self.get_n(), self.ref_index, stream)? as u64)
+        Ok(PsbNumber::write_uint(self.get_n(), self.resource_ref, stream)? as u64)
+    }
+
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct PsbExtraRef {
+
+    pub extra_resource_ref: u64
+
+}
+
+impl PsbExtraRef {
+
+    pub fn get_n(&self) -> u8 {
+        PsbNumber::get_uint_n(self.extra_resource_ref)
+    }
+
+    pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
+        let (ref_read, refernece) = PsbNumber::read_uint(n, stream)?;
+
+        Ok((ref_read, Self { extra_resource_ref : refernece as u64 }))
+    }
+
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
+        Ok(PsbNumber::write_uint(self.get_n(), self.extra_resource_ref, stream)? as u64)
+    }
+
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct PsbStringRef {
+
+    pub string_ref: u64
+
+}
+
+impl PsbStringRef {
+
+    pub fn get_n(&self) -> u8 {
+        PsbNumber::get_uint_n(self.string_ref)
+    }
+
+    pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
+        let (ref_read, refernece) = PsbNumber::read_uint(n, stream)?;
+
+        Ok((ref_read, Self { string_ref : refernece as u64 }))
+    }
+
+    pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
+        Ok(PsbNumber::write_uint(self.get_n(), self.string_ref, stream)? as u64)
     }
 
 }

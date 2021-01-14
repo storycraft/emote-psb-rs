@@ -13,9 +13,14 @@ use itertools::Itertools;
 
 use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue, number::PsbNumber};
 
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PsbUintArray {
 
+    #[cfg_attr(feature = "serde", serde(flatten))]
     vec: Vec<u64>
 
 }
@@ -113,8 +118,10 @@ impl Index<usize> for PsbUintArray {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PsbList {
 
+    #[cfg_attr(feature = "serde", serde(flatten))]
     values: Vec<PsbValue>
 
 }
@@ -265,9 +272,11 @@ impl From<Vec<PsbValue>> for PsbList {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PsbObject {
 
     // key, PsbValue Map
+    #[cfg_attr(feature = "serde", serde(flatten))]
     map: HashMap<String, PsbValue>
 
 }

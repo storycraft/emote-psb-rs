@@ -8,7 +8,7 @@
 mod tests {
     use std::{collections::HashMap, fs::File};
 
-    use emote_psb::{PsbReader, PsbRefs, PsbWriter, types::{PsbValue, collection::{PsbList, PsbObject, PsbUintArray}, number::PsbNumber, reference::PsbReference}};
+    use emote_psb::{PsbReader, PsbRefs, PsbWriter, types::{PsbValue, collection::{PsbList, PsbObject, PsbUintArray}, number::PsbNumber, reference::PsbStringRef}};
 
     #[test]
     fn int_write() {
@@ -65,7 +65,7 @@ mod tests {
             PsbList::from(
                 vec![
                     PsbValue::Number(PsbNumber::Integer(12)),
-                    PsbValue::StringRef(PsbReference::new(111)),
+                    PsbValue::StringRef(PsbStringRef { string_ref: 111 }),
                 ]
             )
         ).write_bytes_refs(&mut buffer, &PsbRefs::new(Vec::new(), Vec::new())).unwrap();
