@@ -15,9 +15,9 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct PsbString {
 
-    #[cfg_attr(feature = "serde", serde(flatten))]
     string: String
 
 }
