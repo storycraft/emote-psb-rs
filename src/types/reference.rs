@@ -34,7 +34,7 @@ impl PsbReference {
     }
 
     pub fn get_n(&self) -> u8 {
-        PsbNumber::get_uint_n(self.ref_index).max(1)
+        PsbNumber::get_uint_n(self.ref_index)
     }
 
     pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, Self), PsbError> {

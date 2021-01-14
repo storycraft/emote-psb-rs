@@ -50,11 +50,11 @@ impl PsbUintArray {
 
     /// Item byte size
     pub fn get_item_n(&self) -> u8 {
-        PsbNumber::get_uint_n(self.vec.iter().max().unwrap().clone())
+        PsbNumber::get_uint_n(*self.vec.iter().max().unwrap_or(&0))
     }
 
     pub fn get_n(&self) -> u8 {
-        PsbNumber::get_uint_n(self.vec.len() as u64).max(1)
+        PsbNumber::get_uint_n(self.vec.len() as u64)
     }
 
     pub fn from_bytes(n: u8, stream: &mut impl Read) -> Result<(u64, PsbUintArray), PsbError> {
@@ -80,20 +80,15 @@ impl PsbUintArray {
 
         let count_written = PsbNumber::write_uint(self.get_n(), len, stream)? as u64;
 
-        if len < 1 {
-            stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + 1)?;
-            Ok(1 + count_written)
-        } else {
-            let n = self.get_item_n();
+        let n = self.get_item_n();
 
-            stream.write_u8(n + PSB_TYPE_INTEGER_ARRAY_N)?;
+        stream.write_u8(n + PSB_TYPE_INTEGER_ARRAY_N)?;
 
-            for num in &self.vec {
-                PsbNumber::write_uint(n, *num, stream)?;
-            }
-
-            Ok(1 + count_written + n as u64 * self.vec.len() as u64)
+        for num in self.vec.iter() {
+            PsbNumber::write_uint(n, *num, stream)?;
         }
+
+        Ok(1 + count_written + n as u64 * len as u64)
     }
 
 }
@@ -185,21 +180,34 @@ impl PsbList {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write, table: &PsbRefs) -> Result<u64, PsbError> {
+        let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
+
         let mut offsets = Vec::<u64>::new();
         let mut data_buffer = Vec::<u8>::new();
 
-        let mut total_data_written = 0_i64;
-
+        let mut total_data_written = 0_u64;
         for value in &self.values {
-            offsets.push(total_data_written as u64);
+            let mut cached = false;
+            for (offset, cache_value) in &value_offset_cache {
+                if value == *cache_value {
+                    offsets.push(*offset);
+                    cached = true;
+                    break;
+                }
+            }
 
-            total_data_written += value.write_bytes_refs(&mut data_buffer, table)? as i64;
+            if !cached {
+                value_offset_cache.insert(total_data_written, &value);
+                offsets.push(total_data_written);
+
+                total_data_written += value.write_bytes_refs(&mut data_buffer, table)?;
+            }
         }
 
         let offset_written = PsbValue::IntArray(PsbUintArray::from(offsets)).write_bytes(stream)?;
         stream.write_all(&data_buffer)?;
 
-        Ok(offset_written + total_data_written as u64)
+        Ok(offset_written + total_data_written)
     }
 
     pub fn collect_strings(&self, vec: &mut Vec<String>) {
@@ -343,6 +351,8 @@ impl PsbObject {
     }
 
     pub fn write_bytes(&self, stream: &mut impl Write, ref_table: &PsbRefs) -> Result<u64, PsbError> {
+        let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
+
         let mut ref_cache = HashMap::<&String, u64>::new();
 
         let mut name_refs = Vec::<u64>::new();
@@ -369,9 +379,22 @@ impl PsbObject {
             };
 
             name_refs.push(name_ref);
-            offsets.push(total_data_written);
 
-            total_data_written += value.write_bytes_refs(&mut data_buffer, ref_table)?;
+            let mut cached = false;
+            for (offset, cache_value) in value_offset_cache.iter() {
+                if value == *cache_value {
+                    offsets.push(*offset);
+                    cached = true;
+                    break;
+                }
+            }
+
+            if !cached {
+                value_offset_cache.insert(total_data_written, &value);
+                offsets.push(total_data_written);
+
+                total_data_written += value.write_bytes_refs(&mut data_buffer, ref_table)?;
+            }
         }
 
         let names_written = PsbValue::IntArray(PsbUintArray::from(name_refs)).write_bytes(stream)?;

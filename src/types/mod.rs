@@ -199,7 +199,12 @@ impl PsbValue {
             PsbValue::Number(number) => {
                 match number {
                     PsbNumber::Integer(integer) => {
-                        let n = PsbNumber::get_n(*integer);
+                        let n = if *integer == 0 {
+                            0
+                        } else {
+                            PsbNumber::get_n(*integer)
+                        };
+
                         stream.write_u8(PSB_TYPE_INTEGER_N + n)?;
                     },
 
@@ -288,7 +293,7 @@ impl PsbValue {
                     },
         
                     None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-                }?).max(1);
+                }?);
                 
                 stream.write_u8(PSB_TYPE_STRING_N + n)?;
 

@@ -5,4 +5,4 @@ Emote psb file library
 
  * Read psb file
  * Read mdf file
- * Write psb file (incomplete & broken)
+ * Write psb file

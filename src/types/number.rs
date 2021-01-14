@@ -89,16 +89,10 @@ impl PsbNumber {
 
     pub fn get_n(mut number: i64) -> u8 {
         if number < 0 {
-            number = !number + 1;
+            number = -number;
         }
         
-        Self::get_uint_n(number as u64)
-    }
-
-    pub fn get_uint_n(number: u64) -> u8 {
-        if number == 0 {
-            0
-        } else if number <= 0x7f {
+        if number <= 0x7f {
             1
         } else if number <= 0x7fff {
             2
@@ -117,9 +111,33 @@ impl PsbNumber {
         }
     }
 
+    pub fn get_uint_n(number: u64) -> u8 {
+        if number <= 0xff {
+            1
+        } else if number <= 0xffff {
+            2
+        } else if number <= 0xffffff {
+            3
+        } else if number <= 0xffffffff {
+            4
+        } else if number <= 0xffffffffff {
+            5
+        } else if number <= 0xffffffffffff {
+            6
+        } else if number <= 0xffffffffffffff {
+            7
+        } else {
+            8
+        }
+    }
+
     pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
         match self {
             PsbNumber::Integer(val) => {
+                if *val == 0 {
+                    return Ok(0);
+                }
+                
                 let n = Self::get_n(*val);
                 
                 Self::write_integer(n, *val, stream)?;
