@@ -4,33 +4,39 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-use std::{collections::{HashMap, hash_map}, io::{Read, Seek, SeekFrom, Write}, ops::Index, slice::Iter};
+use std::{
+    collections::{hash_map, HashMap},
+    io::{Read, Seek, SeekFrom, Write},
+    ops::Index,
+    slice::Iter,
+};
 
 use crate::{PsbError, PsbErrorKind, PsbRefs};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use itertools::Itertools;
 
-use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue, number::PsbNumber};
+use super::{number::PsbNumber, PsbValue, PSB_TYPE_INTEGER_ARRAY_N};
 
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct PsbUintArray {
+    vec: Vec<u64>,
+}
 
-    vec: Vec<u64>
-
+impl Default for PsbUintArray {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PsbUintArray {
-
     pub fn new() -> Self {
-        Self {
-            vec: Vec::new()
-        }
+        Self { vec: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -72,7 +78,7 @@ impl PsbUintArray {
         let mut item_total_read = 0_u64;
         for _ in 0..item_count {
             let (item_read, item) = PsbNumber::read_uint(item_byte_size, stream)?;
-            list.push(item as u64);
+            list.push(item);
 
             item_total_read += item_read;
         }
@@ -93,23 +99,17 @@ impl PsbUintArray {
             PsbNumber::write_uint(n, *num, stream)?;
         }
 
-        Ok(1 + count_written + n as u64 * len as u64)
+        Ok(1 + count_written + n as u64 * len)
     }
-
 }
 
 impl From<Vec<u64>> for PsbUintArray {
-
     fn from(vec: Vec<u64>) -> Self {
-        Self {
-            vec
-        }
+        Self { vec }
     }
-
 }
 
 impl Index<usize> for PsbUintArray {
-    
     type Output = u64;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -121,17 +121,18 @@ impl Index<usize> for PsbUintArray {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct PsbList {
+    values: Vec<PsbValue>,
+}
 
-    values: Vec<PsbValue>
-
+impl Default for PsbList {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PsbList {
-
     pub fn new() -> Self {
-        Self {
-            values: Vec::new()
-        }
+        Self { values: Vec::new() }
     }
 
     pub fn values(&self) -> &Vec<PsbValue> {
@@ -150,13 +151,14 @@ impl PsbList {
         self.values
     }
 
-    pub fn from_bytes<T: Read + Seek>(stream: &mut T, table: &PsbRefs) -> Result<(u64, PsbList), PsbError> {
+    pub fn from_bytes<T: Read + Seek>(
+        stream: &mut T,
+        table: &PsbRefs,
+    ) -> Result<(u64, PsbList), PsbError> {
         let (offsets_read, ref_offsets) = match PsbValue::from_bytes(stream)? {
-    
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
 
-            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }?;
 
         if ref_offsets.len() < 1 {
@@ -167,17 +169,17 @@ impl PsbList {
 
         let mut values = Vec::<PsbValue>::with_capacity(ref_offsets.len());
 
-        let start = stream.seek(SeekFrom::Current(0)).unwrap();
+        let start = stream.stream_position().unwrap();
         let mut total_read = 0_u64;
 
         for offset in ref_offsets.iter() {
-            stream.seek(SeekFrom::Start(start + *offset as u64))?;
+            stream.seek(SeekFrom::Start(start + *offset))?;
             let (read, val) = PsbValue::from_bytes_refs(stream, table)?;
 
             values.push(val);
 
             if max_offset == offset {
-                total_read = read + *offset as u64;
+                total_read = read + *offset;
             }
         }
 
@@ -204,7 +206,7 @@ impl PsbList {
             }
 
             if !cached {
-                value_offset_cache.insert(total_data_written, &value);
+                value_offset_cache.insert(total_data_written, value);
                 offsets.push(total_data_written);
 
                 total_data_written += value.write_bytes_refs(&mut data_buffer, table)?;
@@ -220,7 +222,6 @@ impl PsbList {
     pub fn collect_strings(&self, vec: &mut Vec<String>) {
         for child in self.values.iter() {
             match child {
-
                 PsbValue::Object(child_obj) => {
                     child_obj.collect_strings(vec);
                 }
@@ -237,14 +238,12 @@ impl PsbList {
 
                 _ => {}
             }
-            
         }
     }
 
     pub fn collect_names(&self, vec: &mut Vec<String>) {
         for child in self.values.iter() {
             match child {
-
                 PsbValue::Object(child_obj) => {
                     child_obj.collect_names(vec);
                 }
@@ -255,37 +254,34 @@ impl PsbList {
 
                 _ => {}
             }
-            
         }
     }
-
 }
 
 impl From<Vec<PsbValue>> for PsbList {
-
     fn from(values: Vec<PsbValue>) -> Self {
-        Self {
-            values
-        }
+        Self { values }
     }
-
 }
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct PsbObject {
-
     // key, PsbValue Map
-    map: HashMap<String, PsbValue>
+    map: HashMap<String, PsbValue>,
+}
 
+impl Default for PsbObject {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PsbObject {
-
     pub fn new() -> Self {
         Self {
-            map: HashMap::new()
+            map: HashMap::new(),
         }
     }
 
@@ -301,7 +297,7 @@ impl PsbObject {
         &self.map
     }
 
-    pub fn iter(&self) -> hash_map::Iter<'_, String, PsbValue>{
+    pub fn iter(&self) -> hash_map::Iter<'_, String, PsbValue> {
         self.map.iter()
     }
 
@@ -309,21 +305,20 @@ impl PsbObject {
         self.map
     }
 
-    pub fn from_bytes<T: Read + Seek>(stream: &mut T, table: &PsbRefs) -> Result<(u64, PsbObject), PsbError> {
+    pub fn from_bytes<T: Read + Seek>(
+        stream: &mut T,
+        table: &PsbRefs,
+    ) -> Result<(u64, PsbObject), PsbError> {
         let (names_read, name_refs) = match PsbValue::from_bytes(stream)? {
-    
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
 
-            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }?;
 
         let (offsets_read, ref_offsets) = match PsbValue::from_bytes(stream)? {
-    
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
 
-            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }?;
 
         if name_refs.len() < 1 {
@@ -334,15 +329,15 @@ impl PsbObject {
 
         let mut map = HashMap::<String, PsbValue>::new();
 
-        let start = stream.seek(SeekFrom::Current(0)).unwrap();
+        let start = stream.stream_position().unwrap();
         let mut total_read = 0_u64;
 
         for (name_ref, offset) in name_refs.iter().zip(ref_offsets.iter()) {
-            stream.seek(SeekFrom::Start(start + *offset as u64))?;
+            stream.seek(SeekFrom::Start(start + *offset))?;
             let (read, val) = PsbValue::from_bytes_refs(stream, table)?;
 
             let key = table.names().get(*name_ref as usize);
-           
+
             if key.is_none() {
                 return Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None));
             }
@@ -350,7 +345,7 @@ impl PsbObject {
             map.insert(key.unwrap().clone(), val);
 
             if *max_offset == *offset {
-                total_read = read + *offset as u64;
+                total_read = read + *offset;
             }
         }
 
@@ -359,7 +354,11 @@ impl PsbObject {
         Ok((names_read + offsets_read + total_read, Self::from(map)))
     }
 
-    pub fn write_bytes(&self, stream: &mut impl Write, ref_table: &PsbRefs) -> Result<u64, PsbError> {
+    pub fn write_bytes(
+        &self,
+        stream: &mut impl Write,
+        ref_table: &PsbRefs,
+    ) -> Result<u64, PsbError> {
         let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
 
         let mut ref_cache = HashMap::<&String, u64>::new();
@@ -370,7 +369,7 @@ impl PsbObject {
 
         let mut total_data_written = 0_u64;
 
-        for name in self.map.keys().into_iter().sorted() {
+        for name in self.map.keys().sorted() {
             let value = self.map.get(name).unwrap();
 
             let name_ref = if ref_cache.contains_key(name) {
@@ -381,9 +380,9 @@ impl PsbObject {
                         ref_cache.insert(name, index);
 
                         Ok(index)
-                    },
+                    }
 
-                    None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
+                    None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
                 }?
             };
 
@@ -399,25 +398,25 @@ impl PsbObject {
             }
 
             if !cached {
-                value_offset_cache.insert(total_data_written, &value);
+                value_offset_cache.insert(total_data_written, value);
                 offsets.push(total_data_written);
 
                 total_data_written += value.write_bytes_refs(&mut data_buffer, ref_table)?;
             }
         }
 
-        let names_written = PsbValue::IntArray(PsbUintArray::from(name_refs)).write_bytes(stream)?;
+        let names_written =
+            PsbValue::IntArray(PsbUintArray::from(name_refs)).write_bytes(stream)?;
         let offset_written = PsbValue::IntArray(PsbUintArray::from(offsets)).write_bytes(stream)?;
 
         stream.write_all(&data_buffer)?;
 
-        Ok(names_written + offset_written + total_data_written as u64)
+        Ok(names_written + offset_written + total_data_written)
     }
 
     pub fn collect_names(&self, vec: &mut Vec<String>) {
         for (name, child) in self.map.iter() {
             match child {
-
                 PsbValue::Object(child_obj) => {
                     child_obj.collect_names(vec);
                 }
@@ -429,7 +428,7 @@ impl PsbObject {
                 _ => {}
             }
 
-            if !vec.contains(&name) {
+            if !vec.contains(name) {
                 vec.push(name.clone());
             }
         }
@@ -438,7 +437,6 @@ impl PsbObject {
     pub fn collect_strings(&self, vec: &mut Vec<String>) {
         for (_, child) in self.map.iter() {
             match child {
-
                 PsbValue::Object(child_obj) => {
                     child_obj.collect_strings(vec);
                 }
@@ -455,18 +453,12 @@ impl PsbObject {
 
                 _ => {}
             }
-            
         }
     }
-
 }
 
 impl From<HashMap<String, PsbValue>> for PsbObject {
-
     fn from(map: HashMap<String, PsbValue>) -> Self {
-        Self {
-            map
-        }
+        Self { map }
     }
-
 }

@@ -1,4 +1,4 @@
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, Write};
 
 /*
  * Created on Tue Jan 12 2021
@@ -8,17 +8,12 @@ use std::io::{Read, Seek, SeekFrom, Write};
 
 #[derive(Debug)]
 pub struct SafeIndexVec<T> {
-
-    vec: Vec<T>
-
+    vec: Vec<T>,
 }
 
 impl<T: Default + Clone> SafeIndexVec<T> {
-
     pub fn new() -> Self {
-        Self {
-            vec: Vec::new()
-        }
+        Self { vec: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -44,23 +39,21 @@ impl<T: Default + Clone> SafeIndexVec<T> {
     pub fn into_inner(self) -> Vec<T> {
         self.vec
     }
-
 }
 
 pub struct XorShiftStream<T> {
-
     stream: T,
 
     read_seeds: [u32; 4],
-    write_seeds: [u32; 4]
-
+    write_seeds: [u32; 4],
 }
 
 impl<T> XorShiftStream<T> {
-
     pub fn new(stream: T, seeds: [u32; 4]) -> Self {
         Self {
-            stream, read_seeds: seeds, write_seeds: seeds
+            stream,
+            read_seeds: seeds,
+            write_seeds: seeds,
         }
     }
 
@@ -87,32 +80,31 @@ impl<T> XorShiftStream<T> {
 
         seeds[3]
     }
-
 }
 
 impl<T: Write + Seek> Write for XorShiftStream<T> {
-
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let current = self.stream.seek(SeekFrom::Current(0)).unwrap() as usize;
+        let current = self.stream.stream_position().unwrap() as usize;
 
         let arr = self.next_write().to_le_bytes();
 
         self.stream.write(
-            &buf.iter().enumerate().map(|(i, &val)| val ^ arr[(current + i) % 4]).collect::<Vec<u8>>()
+            &buf.iter()
+                .enumerate()
+                .map(|(i, &val)| val ^ arr[(current + i) % 4])
+                .collect::<Vec<u8>>(),
         )
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.stream.flush()
     }
-
 }
 
 impl<T: Read + Seek> Read for XorShiftStream<T> {
-
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let current = self.stream.seek(SeekFrom::Current(0)).unwrap() as usize;
-        
+        let current = self.stream.stream_position().unwrap() as usize;
+
         let read = self.stream.read(buf)?;
         let arr = self.next_read().to_le_bytes();
 
@@ -122,5 +114,4 @@ impl<T: Read + Seek> Read for XorShiftStream<T> {
 
         Ok(read)
     }
-
 }

@@ -9,7 +9,7 @@ use std::io::{Read, Write};
 use crate::{PsbError, PsbErrorKind, PsbRefs};
 
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::reference::PsbStringRef;
 
@@ -17,16 +17,19 @@ use super::reference::PsbStringRef;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct PsbString {
+    string: String,
+}
 
-    string: String
-
+impl Default for PsbString {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PsbString {
-
     pub fn new() -> Self {
         Self {
-            string: String::new()
+            string: String::new(),
         }
     }
 
@@ -46,7 +49,11 @@ impl PsbString {
         self.string
     }
 
-    pub fn from_bytes(n: u8, stream: &mut impl Read, table: &PsbRefs) -> Result<(u64, Self), PsbError> {
+    pub fn from_bytes(
+        n: u8,
+        stream: &mut impl Read,
+        table: &PsbRefs,
+    ) -> Result<(u64, Self), PsbError> {
         let (read, reference) = PsbStringRef::from_bytes(n, stream)?;
 
         let string = table.get_string(reference.string_ref as usize);
@@ -54,28 +61,29 @@ impl PsbString {
         if string.is_none() {
             return Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None));
         }
-        
+
         Ok((read, Self::from(string.unwrap().clone())))
     }
 
     // Returns written, ref_index tuple
-    pub fn write_bytes(&self, stream: &mut impl Write, ref_table: &PsbRefs) -> Result<u64, PsbError> {
+    pub fn write_bytes(
+        &self,
+        stream: &mut impl Write,
+        ref_table: &PsbRefs,
+    ) -> Result<u64, PsbError> {
         match ref_table.find_string_index(&self.string) {
+            Some(ref_index) => PsbStringRef {
+                string_ref: ref_index,
+            }
+            .write_bytes(stream),
 
-            Some(ref_index) => {
-                PsbStringRef { string_ref: ref_index }.write_bytes(stream)
-            },
-
-            None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
+            None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }
     }
-
 }
 
 impl From<String> for PsbString {
-
     fn from(string: String) -> Self {
         Self { string }
     }
-
 }

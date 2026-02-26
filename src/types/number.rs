@@ -10,40 +10,30 @@ use crate::{PsbError, PsbErrorKind};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use super::{PSB_TYPE_DOUBLE, PSB_TYPE_FLOAT, PSB_TYPE_INTEGER_N, PSB_TYPE_FLOAT0};
+use super::{PSB_TYPE_DOUBLE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0, PSB_TYPE_INTEGER_N};
 
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum PsbNumber {
-
     Integer(i64),
     Double(f64),
-    Float(f32)
-
+    Float(f32),
 }
 
 impl PsbNumber {
-
     pub fn from_bytes(number_type: u8, stream: &mut impl Read) -> Result<(u64, Self), PsbError> {
         match number_type {
+            PSB_TYPE_DOUBLE => Ok((8, Self::Double(stream.read_f64::<LittleEndian>()?))),
 
-            PSB_TYPE_DOUBLE => {
-                Ok((8, Self::Double(stream.read_f64::<LittleEndian>()?)))
-            },
+            PSB_TYPE_FLOAT => Ok((4, Self::Float(stream.read_f32::<LittleEndian>()?))),
 
-            PSB_TYPE_FLOAT => {
-                Ok((4, Self::Float(stream.read_f32::<LittleEndian>()?)))
-            },
+            PSB_TYPE_FLOAT0 => Ok((0, Self::Float(0_f32))),
 
-            PSB_TYPE_FLOAT0 => {
-                Ok((0, Self::Float(0_f32)))
-            },
-
-            _ if number_type >= PSB_TYPE_INTEGER_N && number_type <= PSB_TYPE_INTEGER_N + 8 => {
+            _ if (PSB_TYPE_INTEGER_N..=PSB_TYPE_INTEGER_N + 8).contains(&number_type) => {
                 let number_size = number_type - PSB_TYPE_INTEGER_N;
 
                 let (read, val) = Self::read_integer(number_size, stream)?;
@@ -51,10 +41,7 @@ impl PsbNumber {
                 Ok((read, Self::Integer(val)))
             }
 
-            _ => {
-                Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
-            }
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None)),
         }
     }
 
@@ -96,7 +83,7 @@ impl PsbNumber {
         if number < 0 {
             number = -number;
         }
-        
+
         if number <= 0x7f {
             1
         } else if number <= 0x7fff {
@@ -142,17 +129,17 @@ impl PsbNumber {
                 if *val == 0 {
                     return Ok(0);
                 }
-                
+
                 let n = Self::get_n(*val);
-                
+
                 Self::write_integer(n, *val, stream)?;
                 Ok(n as u64)
-            },
+            }
 
             PsbNumber::Double(val) => {
                 stream.write_f64::<LittleEndian>(*val)?;
                 Ok(8)
-            },
+            }
 
             PsbNumber::Float(val) => {
                 if *val == 0f32 {
@@ -163,7 +150,6 @@ impl PsbNumber {
                     Ok(4)
                 }
             }
-
         }
     }
 
@@ -180,7 +166,6 @@ impl PsbNumber {
     pub fn write_integer(n: u8, number: i64, stream: &mut impl Write) -> Result<u8, PsbError> {
         Self::write_uint(n, number as u64, stream)
     }
-
 }
 
 impl From<i8> for PsbNumber {

@@ -4,25 +4,30 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
-use std::{collections::{HashMap, hash_map}, io::{Read, Seek, Write}, slice::Iter};
+use std::{
+    collections::{hash_map, HashMap},
+    io::{Read, Seek, Write},
+    slice::Iter,
+};
 
-use crate::{PsbError, PsbErrorKind, internal::SafeIndexVec};
+use crate::{internal::SafeIndexVec, PsbError, PsbErrorKind};
 
-use super::{PsbValue, collection::PsbUintArray};
+use super::{collection::PsbUintArray, PsbValue};
 
 /// Binary tree
 pub struct PsbBinaryTree {
+    pub list: Vec<Vec<u8>>,
+}
 
-    pub list: Vec<Vec<u8>>
-
+impl Default for PsbBinaryTree {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PsbBinaryTree {
-
     pub fn new() -> Self {
-        Self {
-            list: Vec::new()
-        }
+        Self { list: Vec::new() }
     }
 
     pub fn list(&self) -> &Vec<Vec<u8>> {
@@ -47,25 +52,19 @@ impl PsbBinaryTree {
 
     pub fn from_bytes<T: Read + Seek>(stream: &mut T) -> Result<(u64, Self), PsbError> {
         let (offsets_read, offsets) = match PsbValue::from_bytes(stream)? {
-    
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
 
-            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }?;
         let (tree_read, tree) = match PsbValue::from_bytes(stream)? {
-
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
 
-            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }?;
         let (indexes_read, indexes) = match PsbValue::from_bytes(stream)? {
-
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
 
-            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }?;
 
         // Unwrap all to vec
@@ -77,7 +76,7 @@ impl PsbBinaryTree {
 
         for index in indexes {
             let mut buffer = Vec::<u8>::new();
-            
+
             let mut id = tree[index as usize];
 
             while id != 0 {
@@ -86,7 +85,7 @@ impl PsbBinaryTree {
 
                 // get values from offsets
                 let decoded = id - offsets[next as usize];
-                
+
                 id = next;
 
                 buffer.push(decoded as u8);
@@ -101,7 +100,7 @@ impl PsbBinaryTree {
 
     pub fn build_tree(&self) -> TreeNode {
         let mut root = TreeNode::new();
-        
+
         for data in &self.list {
             let mut last_node = &mut root;
 
@@ -111,7 +110,7 @@ impl PsbBinaryTree {
 
             last_node.get_or_insert(0);
         }
-        
+
         root
     }
 
@@ -125,21 +124,24 @@ impl PsbBinaryTree {
         offsets.push(1);
         self.make_sub_tree(&mut root, Vec::new(), &mut offsets, &mut tree, &mut indexes);
 
-        let offsets_written = PsbValue::IntArray(PsbUintArray::from(offsets.into_inner())).write_bytes(stream)?;
-        let tree_written = PsbValue::IntArray(PsbUintArray::from(tree.into_inner())).write_bytes(stream)?;
-        let indexes_written = PsbValue::IntArray(PsbUintArray::from(indexes.into_inner())).write_bytes(stream)?;
+        let offsets_written =
+            PsbValue::IntArray(PsbUintArray::from(offsets.into_inner())).write_bytes(stream)?;
+        let tree_written =
+            PsbValue::IntArray(PsbUintArray::from(tree.into_inner())).write_bytes(stream)?;
+        let indexes_written =
+            PsbValue::IntArray(PsbUintArray::from(indexes.into_inner())).write_bytes(stream)?;
 
         Ok(offsets_written + tree_written + indexes_written)
     }
 
-    // Returns last node 
+    // Returns last node
     fn make_sub_tree(
         &self,
         current_node: &mut TreeNode,
         value: Vec<u8>,
         offsets: &mut SafeIndexVec<u64>,
         tree: &mut SafeIndexVec<u64>,
-        indexes: &mut SafeIndexVec<u64>
+        indexes: &mut SafeIndexVec<u64>,
     ) {
         let min_value = *current_node.min_value().unwrap_or(&0);
         let begin_pos = current_node.begin_pos;
@@ -174,7 +176,7 @@ impl PsbBinaryTree {
 
             let count = child_max - child_min;
             let end = pos + count;
-            
+
             tree.set(end, 0);
 
             if *child_value == 0 {
@@ -194,37 +196,35 @@ impl PsbBinaryTree {
             self.make_sub_tree(child, value, offsets, tree, indexes);
         }
     }
-
 }
 
 impl From<Vec<Vec<u8>>> for PsbBinaryTree {
-
     fn from(list: Vec<Vec<u8>>) -> Self {
-        Self {
-            list
-        }
+        Self { list }
     }
-
 }
 
 #[derive(Debug)]
 pub struct TreeNode {
-
     /// Children value, node
     children: HashMap<u8, TreeNode>,
-    
-    pub begin_pos: u64,
-    pub id: u64
 
+    pub begin_pos: u64,
+    pub id: u64,
+}
+
+impl Default for TreeNode {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TreeNode {
-
     pub fn new() -> Self {
         Self {
             children: HashMap::new(),
             id: 0,
-            begin_pos: 0
+            begin_pos: 0,
         }
     }
 
@@ -236,11 +236,11 @@ impl TreeNode {
         self.children.keys().max()
     }
 
-    pub fn iter(&self) -> hash_map::Iter<u8, Self> {
+    pub fn iter(&self) -> hash_map::Iter<'_, u8, Self> {
         self.children.iter()
     }
 
-    pub fn iter_mut(&mut self) -> hash_map::IterMut<u8, Self> {
+    pub fn iter_mut(&mut self) -> hash_map::IterMut<'_, u8, Self> {
         self.children.iter_mut()
     }
 
@@ -257,23 +257,22 @@ impl TreeNode {
     }
 
     pub fn get_or_insert(&mut self, value: u8) -> &Self {
-        if !self.children.contains_key(&value) {
-            let new_node = Self::new();
+        self.children.entry(value).or_insert_with(|| {
+            
 
-            self.children.insert(value, new_node);
-        }
+            Self::new()
+        });
 
         self.children.get(&value).unwrap()
     }
 
     pub fn get_or_insert_mut(&mut self, value: u8) -> &mut Self {
-        if !self.children.contains_key(&value) {
-            let new_node = Self::new();
+        self.children.entry(value).or_insert_with(|| {
+            
 
-            self.children.insert(value, new_node);
-        }
+            Self::new()
+        });
 
         self.children.get_mut(&value).unwrap()
     }
-
 }

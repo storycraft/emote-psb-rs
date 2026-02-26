@@ -4,15 +4,15 @@
  * Copyright (c) storycraft. Licensed under the MIT Licence.
  */
 
+pub mod binary_tree;
 pub mod collection;
 pub mod number;
 pub mod reference;
-pub mod binary_tree;
 pub mod string;
 
 use std::io::{Read, Seek, Write};
 
-use collection::{PsbUintArray, PsbList, PsbObject};
+use collection::{PsbList, PsbObject, PsbUintArray};
 use number::PsbNumber;
 use reference::PsbExtraRef;
 
@@ -22,7 +22,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use self::{reference::PsbResourceRef, string::PsbString};
 
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub const PSB_TYPE_NONE: u8 = 0x00;
 
@@ -64,8 +64,8 @@ pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum PsbValue {
-
-    None, Null,
+    None,
+    Null,
     Bool(bool),
     Number(PsbNumber),
     IntArray(PsbUintArray),
@@ -84,56 +84,61 @@ pub enum PsbValue {
     CompilerDecimal,
     CompilerArray,
     CompilerBool,
-    CompilerBinaryTree
-
+    CompilerBinaryTree,
 }
 
 impl PsbValue {
-
-    fn from_bytes_type<T: Read + Seek>(value_type: u8, stream: &mut T) -> Result<(u64, PsbValue), PsbError> {
+    fn from_bytes_type<T: Read + Seek>(
+        value_type: u8,
+        stream: &mut T,
+    ) -> Result<(u64, PsbValue), PsbError> {
         match value_type {
             PSB_TYPE_NONE => Ok((1, PsbValue::None)),
             PSB_TYPE_NULL => Ok((1, PsbValue::Null)),
 
             PSB_TYPE_FALSE => Ok((1, PsbValue::Bool(false))),
             PSB_TYPE_TRUE => Ok((1, PsbValue::Bool(true))),
-            
+
             PSB_TYPE_DOUBLE => {
                 let (read, val) = PsbNumber::from_bytes(value_type, stream)?;
                 Ok((read + 1, PsbValue::Number(val)))
-            },
+            }
 
             PSB_TYPE_FLOAT0 => {
                 let (read, val) = PsbNumber::from_bytes(value_type, stream)?;
                 Ok((read + 1, PsbValue::Number(val)))
-            },
+            }
 
             PSB_TYPE_FLOAT => {
                 let (read, val) = PsbNumber::from_bytes(value_type, stream)?;
                 Ok((read + 1, PsbValue::Number(val)))
-            },
+            }
 
-            _ if value_type >= PSB_TYPE_INTEGER_N && value_type <= PSB_TYPE_INTEGER_N + 8 => {
+            _ if (PSB_TYPE_INTEGER_N..=PSB_TYPE_INTEGER_N + 8).contains(&value_type) => {
                 let (read, number) = PsbNumber::from_bytes(value_type, stream)?;
                 Ok((read + 1, PsbValue::Number(number)))
-            },
+            }
 
-            _ if value_type > PSB_TYPE_INTEGER_ARRAY_N && value_type <= PSB_TYPE_INTEGER_ARRAY_N + 8 => {
-                let (read, array) = PsbUintArray::from_bytes(value_type - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
+            _ if value_type > PSB_TYPE_INTEGER_ARRAY_N
+                && value_type <= PSB_TYPE_INTEGER_ARRAY_N + 8 =>
+            {
+                let (read, array) =
+                    PsbUintArray::from_bytes(value_type - PSB_TYPE_INTEGER_ARRAY_N, stream)?;
                 Ok((read + 1, PsbValue::IntArray(array)))
-            },
+            }
 
             _ if value_type > PSB_TYPE_RESOURCE_N && value_type <= PSB_TYPE_RESOURCE_N + 4 => {
-                let (read, map) = PsbResourceRef::from_bytes(value_type - PSB_TYPE_RESOURCE_N, stream)?;
+                let (read, map) =
+                    PsbResourceRef::from_bytes(value_type - PSB_TYPE_RESOURCE_N, stream)?;
 
                 Ok((read + 1, PsbValue::Resource(map)))
-            },
+            }
 
             _ if value_type > PSB_TYPE_EXTRA_N && value_type <= PSB_TYPE_EXTRA_N + 4 => {
                 let (read, map) = PsbExtraRef::from_bytes(value_type - PSB_TYPE_EXTRA_N, stream)?;
 
                 Ok((read + 1, PsbValue::ExtraResource(map)))
-            },
+            }
 
             PSB_COMPILER_INTEGER => Ok((1, PsbValue::CompilerNumber)),
             PSB_COMPILER_STRING => Ok((1, PsbValue::CompilerString)),
@@ -142,9 +147,7 @@ impl PsbValue {
             PSB_COMPILER_BOOL => Ok((1, PsbValue::CompilerBool)),
             PSB_COMPILER_BINARY_TREE => Ok((1, PsbValue::CompilerBinaryTree)),
 
-            _ => {
-                Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
-            }
+            _ => Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None)),
         }
     }
 
@@ -152,33 +155,33 @@ impl PsbValue {
         Self::from_bytes_type(stream.read_u8()?, stream)
     }
 
-    pub fn from_bytes_refs<T: Read + Seek>(stream: &mut T, table: &PsbRefs) -> Result<(u64, PsbValue), PsbError> {
+    pub fn from_bytes_refs<T: Read + Seek>(
+        stream: &mut T,
+        table: &PsbRefs,
+    ) -> Result<(u64, PsbValue), PsbError> {
         let value_type = stream.read_u8()?;
 
         match value_type {
-
             PSB_TYPE_LIST => {
                 let (read, list) = PsbList::from_bytes(stream, table)?;
 
                 Ok((read + 1, PsbValue::List(list)))
-            },
+            }
 
             PSB_TYPE_OBJECT => {
                 let (read, map) = PsbObject::from_bytes(stream, table)?;
 
                 Ok((read + 1, PsbValue::Object(map)))
-            },
-
-            _ if value_type > PSB_TYPE_STRING_N && value_type <= PSB_TYPE_STRING_N + 4 => {
-                let (read, string) = PsbString::from_bytes(value_type - PSB_TYPE_STRING_N, stream, table)?;
-
-                Ok((read + 1, PsbValue::String(string)))
-            },
-
-            _ => {
-                Self::from_bytes_type(value_type, stream)
             }
 
+            _ if value_type > PSB_TYPE_STRING_N && value_type <= PSB_TYPE_STRING_N + 4 => {
+                let (read, string) =
+                    PsbString::from_bytes(value_type - PSB_TYPE_STRING_N, stream, table)?;
+
+                Ok((read + 1, PsbValue::String(string)))
+            }
+
+            _ => Self::from_bytes_type(value_type, stream),
         }
     }
 
@@ -187,11 +190,11 @@ impl PsbValue {
             PsbValue::None => {
                 stream.write_u8(PSB_TYPE_NONE)?;
                 Ok(1)
-            },
+            }
             PsbValue::Null => {
                 stream.write_u8(PSB_TYPE_NULL)?;
                 Ok(1)
-            },
+            }
             PsbValue::Bool(value) => {
                 if *value {
                     stream.write_u8(PSB_TYPE_TRUE)?;
@@ -200,7 +203,7 @@ impl PsbValue {
                 }
 
                 Ok(1)
-            },
+            }
             PsbValue::Number(number) => {
                 match number {
                     PsbNumber::Integer(integer) => {
@@ -211,11 +214,11 @@ impl PsbValue {
                         };
 
                         stream.write_u8(PSB_TYPE_INTEGER_N + n)?;
-                    },
+                    }
 
                     PsbNumber::Double(_) => {
                         stream.write_u8(PSB_TYPE_DOUBLE)?;
-                    },
+                    }
 
                     PsbNumber::Float(float) => {
                         if *float == 0_f32 {
@@ -227,93 +230,89 @@ impl PsbValue {
                 }
 
                 Ok(1 + number.write_bytes(stream)?)
-            },
+            }
 
             PsbValue::IntArray(array) => {
                 stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + array.get_n())?;
 
                 Ok(1 + array.write_bytes(stream)?)
-            },
+            }
 
             PsbValue::Resource(res) => {
                 stream.write_u8(PSB_TYPE_RESOURCE_N + res.get_n())?;
 
                 Ok(1 + res.write_bytes(stream)?)
-            },
+            }
             PsbValue::ExtraResource(res) => {
                 stream.write_u8(PSB_TYPE_EXTRA_N + res.get_n())?;
 
                 Ok(1 + res.write_bytes(stream)?)
-            },
+            }
 
             PsbValue::CompilerNumber => {
                 stream.write_u8(PSB_COMPILER_INTEGER)?;
                 Ok(1)
-            },
+            }
             PsbValue::CompilerString => {
                 stream.write_u8(PSB_COMPILER_STRING)?;
                 Ok(1)
-            },
+            }
             PsbValue::CompilerResource => {
                 stream.write_u8(PSB_COMPILER_RESOURCE)?;
                 Ok(1)
-            },
+            }
             PsbValue::CompilerDecimal => {
                 stream.write_u8(PSB_COMPILER_DECIMAL)?;
                 Ok(1)
-            },
+            }
             PsbValue::CompilerArray => {
                 stream.write_u8(PSB_COMPILER_ARRAY)?;
                 Ok(1)
-            },
+            }
             PsbValue::CompilerBool => {
                 stream.write_u8(PSB_COMPILER_BOOL)?;
                 Ok(1)
-            },
+            }
             PsbValue::CompilerBinaryTree => {
                 stream.write_u8(PSB_COMPILER_BINARY_TREE)?;
                 Ok(1)
-            },
-
-            _ => {
-                Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None))
             }
+
+            _ => Err(PsbError::new(PsbErrorKind::InvalidPSBValue, None)),
         }
     }
 
-    pub fn write_bytes_refs(&self, stream: &mut impl Write, table: &PsbRefs) -> Result<u64, PsbError> {
+    pub fn write_bytes_refs(
+        &self,
+        stream: &mut impl Write,
+        table: &PsbRefs,
+    ) -> Result<u64, PsbError> {
         match &self {
-
             PsbValue::String(string) => {
                 let n = PsbNumber::get_uint_n(match table.find_string_index(string.string()) {
+                    Some(ref_index) => Ok(ref_index),
 
-                    Some(ref_index) => {
-                        Ok(ref_index)
-                    },
-        
-                    None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
+                    None => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
                 }?);
-                
+
                 stream.write_u8(PSB_TYPE_STRING_N + n)?;
 
                 Ok(1 + string.write_bytes(stream, table)?)
-            },
+            }
 
             PsbValue::List(list) => {
                 stream.write_u8(PSB_TYPE_LIST)?;
 
                 Ok(1 + list.write_bytes(stream, table)?)
-            },
+            }
 
             PsbValue::Object(object) => {
                 stream.write_u8(PSB_TYPE_OBJECT)?;
 
                 Ok(1 + object.write_bytes(stream, table)?)
-            },
+            }
 
-            _ => self.write_bytes(stream)
-
+            _ => self.write_bytes(stream),
         }
     }
-
 }

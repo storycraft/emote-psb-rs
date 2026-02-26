@@ -20,9 +20,12 @@ pub use writer::PsbWriter;
 use header::PsbHeader;
 use io::Seek;
 use offsets::{PsbOffsets, PsbResourcesOffset};
-use types::{PsbValue, collection::PsbObject};
+use types::{collection::PsbObject, PsbValue};
 
-use std::{error::Error, io::{self, Read, SeekFrom}};
+use std::{
+    error::Error,
+    io::{self, Read, SeekFrom},
+};
 
 /// psb file signature
 pub const PSB_SIGNATURE: u32 = 0x425350;
@@ -32,14 +35,11 @@ pub const PSB_MDF_SIGNATURE: u32 = 0x66646D;
 
 #[derive(Debug)]
 pub struct PsbError {
-
     kind: PsbErrorKind,
-    err: Option<Box<dyn Error>>
-
+    err: Option<Box<dyn Error>>,
 }
 
 impl PsbError {
-
     pub fn new(kind: PsbErrorKind, err: Option<Box<dyn Error>>) -> Self {
         Self { kind, err }
     }
@@ -51,12 +51,10 @@ impl PsbError {
     pub fn source(&self) -> &Option<Box<dyn Error>> {
         &self.err
     }
-
 }
 
 #[derive(Debug)]
 pub enum PsbErrorKind {
-
     Io(io::Error),
     InvalidFile,
     InvalidHeader,
@@ -65,33 +63,25 @@ pub enum PsbErrorKind {
     InvalidPSBValue,
     InvalidPSBRoot,
     InvalidOffsetTable,
-    Custom
-
+    Custom,
 }
 
 impl From<io::Error> for PsbError {
-
     fn from(err: io::Error) -> Self {
         PsbError::new(PsbErrorKind::Io(err), None)
     }
-
 }
 
 #[derive(Debug, Clone)]
 pub struct PsbRefs {
-
     names: Vec<String>,
 
     strings: Vec<String>,
-
 }
 
 impl PsbRefs {
-
     pub fn new(names: Vec<String>, strings: Vec<String>) -> Self {
-        Self {
-            names, strings
-        }
+        Self { names, strings }
     }
 
     pub fn names(&self) -> &Vec<String> {
@@ -117,7 +107,7 @@ impl PsbRefs {
     pub fn find_name_index(&self, name: &String) -> Option<u64> {
         for (i, nm) in self.names.iter().enumerate() {
             if nm == name {
-                return Some(i as u64)
+                return Some(i as u64);
             }
         }
 
@@ -147,7 +137,7 @@ impl PsbRefs {
     pub fn find_string_index(&self, string: &String) -> Option<u64> {
         for (i, st) in self.strings.iter().enumerate() {
             if st == string {
-                return Some(i as u64)
+                return Some(i as u64);
             }
         }
 
@@ -157,29 +147,26 @@ impl PsbRefs {
 
 #[derive(Debug)]
 pub struct VirtualPsb {
-
     header: PsbHeader,
 
     resources: Vec<Vec<u8>>,
     extra: Vec<Vec<u8>>,
 
-    root: PsbObject
-
+    root: PsbObject,
 }
 
 impl VirtualPsb {
-
     pub fn new(
         header: PsbHeader,
         resources: Vec<Vec<u8>>,
         extra: Vec<Vec<u8>>,
-        root: PsbObject
+        root: PsbObject,
     ) -> Self {
         Self {
             header,
             resources,
             extra,
-            root
+            root,
         }
     }
 
@@ -216,36 +203,27 @@ impl VirtualPsb {
     }
 
     pub fn unwrap(self) -> (PsbHeader, Vec<Vec<u8>>, Vec<Vec<u8>>, PsbObject) {
-        (
-            self.header,
-            self.resources,
-            self.extra,
-            self.root
-        )
+        (self.header, self.resources, self.extra, self.root)
     }
-
 }
 
 #[derive(Debug)]
 pub struct PsbFile<T: Read + Seek> {
-
     header: PsbHeader,
-    
+
     refs: PsbRefs,
     offsets: PsbOffsets,
 
-    stream: T
-
+    stream: T,
 }
 
 impl<T: Read + Seek> PsbFile<T> {
-
     pub fn new(header: PsbHeader, refs: PsbRefs, offsets: PsbOffsets, stream: T) -> Self {
         Self {
             header,
             refs,
             offsets,
-            stream
+            stream,
         }
     }
 
@@ -262,11 +240,12 @@ impl<T: Read + Seek> PsbFile<T> {
     }
 
     pub fn entry_point(&self) -> u32 {
-        self.offsets.entry_point as u32
+        self.offsets.entry_point
     }
 
     pub fn load_root(&mut self) -> Result<PsbObject, PsbError> {
-        self.stream.seek(SeekFrom::Start(self.entry_point() as u64))?;
+        self.stream
+            .seek(SeekFrom::Start(self.entry_point() as u64))?;
         let (_, root) = PsbValue::from_bytes_refs(&mut self.stream, &self.refs)?;
 
         if let PsbValue::Object(root_obj) = root {
@@ -288,23 +267,22 @@ impl<T: Read + Seek> PsbFile<T> {
         }
     }
 
-    fn load_from_table<R: Read + Seek>(stream: &mut R, table: PsbResourcesOffset) -> Result<Vec<Vec<u8>>, PsbError> {
+    fn load_from_table<R: Read + Seek>(
+        stream: &mut R,
+        table: PsbResourcesOffset,
+    ) -> Result<Vec<Vec<u8>>, PsbError> {
         stream.seek(SeekFrom::Start(table.offset_pos as u64))?;
         let (_, resource_offsets) = match PsbValue::from_bytes(stream)? {
-    
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
 
-            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }?;
-        
+
         stream.seek(SeekFrom::Start(table.lengths_pos as u64))?;
         let (_, resource_lengths) = match PsbValue::from_bytes(stream)? {
-
             (read, PsbValue::IntArray(array)) => Ok((read, array)),
 
-            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None))
-
+            _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
         }?;
 
         if resource_offsets.len() < resource_lengths.len() {
@@ -319,8 +297,12 @@ impl<T: Read + Seek> PsbFile<T> {
         for i in 0..resource_offsets.len() {
             let mut buffer = Vec::new();
 
-            stream.seek(SeekFrom::Start(table.data_pos as u64 + resource_offsets[i] as u64))?;
-            stream.take(resource_lengths[i] as u64).read_to_end(&mut buffer)?;
+            stream.seek(SeekFrom::Start(
+                table.data_pos as u64 + resource_offsets[i],
+            ))?;
+            stream
+                .take(resource_lengths[i])
+                .read_to_end(&mut buffer)?;
 
             resources.push(buffer);
         }
@@ -342,5 +324,4 @@ impl<T: Read + Seek> PsbFile<T> {
     pub fn unwrap(self) -> T {
         self.stream
     }
-
 }

@@ -8,21 +8,23 @@ use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom, Write};
 
 use adler::Adler32;
 use byteorder::{LittleEndian, WriteBytesExt};
-use flate2::{Compression, bufread::ZlibEncoder};
+use flate2::{bufread::ZlibEncoder, Compression};
 
-use crate::{PSB_MDF_SIGNATURE, PSB_SIGNATURE, PsbError, PsbRefs, VirtualPsb, header::MdfHeader, offsets::{PsbOffsets, PsbResourcesOffset, PsbStringOffset}, types::{PsbValue, binary_tree::PsbBinaryTree, collection::PsbUintArray}};
+use crate::{
+    header::MdfHeader,
+    offsets::{PsbOffsets, PsbResourcesOffset, PsbStringOffset},
+    types::{binary_tree::PsbBinaryTree, collection::PsbUintArray, PsbValue},
+    PsbError, PsbRefs, VirtualPsb, PSB_MDF_SIGNATURE, PSB_SIGNATURE,
+};
 
 pub struct PsbWriter<T> {
-
     pub psb: VirtualPsb,
 
-    stream: T
-
+    stream: T,
 }
 
 impl<T: Write> PsbWriter<T> {
-
-    pub fn write_names(names: &Vec<String>, stream: &mut T) -> Result<u64, PsbError> {
+    pub fn write_names(names: &[String], stream: &mut T) -> Result<u64, PsbError> {
         let mut buffer_list = Vec::<Vec<u8>>::new();
 
         for name in names.iter() {
@@ -31,41 +33,33 @@ impl<T: Write> PsbWriter<T> {
 
         PsbBinaryTree::from(buffer_list).write_bytes(stream)
     }
-
 }
 
 impl<T: Write + Seek> PsbWriter<T> {
-
-    pub fn new(
-        psb: VirtualPsb,
-        stream: T
-    ) -> Self {
-        Self {
-            psb,
-            stream
-        }
+    pub fn new(psb: VirtualPsb, stream: T) -> Self {
+        Self { psb, stream }
     }
 
     /// Write file and finish stream
     pub fn finish(mut self) -> Result<u64, PsbError> {
-        let file_start = self.stream.seek(SeekFrom::Current(0)).unwrap();
+        let file_start = self.stream.stream_position().unwrap();
 
         let (header, resources, extra, root) = self.psb.unwrap();
 
         self.stream.write_u32::<LittleEndian>(PSB_SIGNATURE)?;
         header.write_bytes(&mut self.stream)?;
 
-        let offsets_end_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start;
+        let offsets_end_pos = self.stream.stream_position().unwrap() - file_start;
         self.stream.write_u32::<LittleEndian>(0)?;
 
         // Offsets
-        let offset_start_pos = self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start;
+        let offset_start_pos = self.stream.stream_position().unwrap() - file_start;
         let mut offsets = PsbOffsets::default();
 
         // Offsets prefill
         offsets.write_bytes(header.version, &mut self.stream)?;
 
-        let offsets_end = self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start;
+        let offsets_end = self.stream.stream_position().unwrap() - file_start;
 
         let refs = {
             let mut names = Vec::new();
@@ -82,13 +76,15 @@ impl<T: Write + Seek> PsbWriter<T> {
 
         // Names
         {
-            offsets.name_offset = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
+            offsets.name_offset =
+                (self.stream.stream_position().unwrap() - file_start) as u32;
             Self::write_names(refs.names(), &mut self.stream)?;
         }
 
         // Root Entry
         {
-            offsets.entry_point = (self.stream.seek(SeekFrom::Current(0)).unwrap() - file_start) as u32;
+            offsets.entry_point =
+                (self.stream.stream_position().unwrap() - file_start) as u32;
             PsbValue::Object(root).write_bytes_refs(&mut self.stream, &refs)?;
         }
 
@@ -112,7 +108,7 @@ impl<T: Write + Seek> PsbWriter<T> {
         }
 
         // Rewrite entries
-        let file_end = self.stream.seek(SeekFrom::Current(0)).unwrap();
+        let file_end = self.stream.stream_position().unwrap();
 
         self.stream.seek(SeekFrom::Start(offsets_end_pos))?;
         self.stream.write_u32::<LittleEndian>(offsets_end as u32)?;
@@ -128,7 +124,7 @@ impl<T: Write + Seek> PsbWriter<T> {
             adler.write_slice(&offsets.resources.lengths_pos.to_le_bytes());
             adler.write_slice(&offsets.resources.data_pos.to_le_bytes());
             adler.write_slice(&offsets.entry_point.to_le_bytes());
-            
+
             offsets.checksum = Some(adler.checksum());
         }
 
@@ -141,7 +137,10 @@ impl<T: Write + Seek> PsbWriter<T> {
     }
 
     /// Write resources. Returns written size, PsbResourcesOffset tuple
-    pub fn write_resources(resources: &Vec<Vec<u8>>, stream: &mut T) -> Result<(u64, PsbResourcesOffset), PsbError> {
+    pub fn write_resources(
+        resources: &[Vec<u8>],
+        stream: &mut T,
+    ) -> Result<(u64, PsbResourcesOffset), PsbError> {
         let mut offset_list = Vec::<u64>::new();
         let mut length_list = Vec::<u64>::new();
 
@@ -155,70 +154,75 @@ impl<T: Write + Seek> PsbWriter<T> {
             total_len += len;
         }
 
-        let offset_pos = (stream.seek(SeekFrom::Current(0)).unwrap()) as u32;
-        let offsets_written = PsbValue::IntArray(PsbUintArray::from(offset_list)).write_bytes(stream)?;
+        let offset_pos = (stream.stream_position().unwrap()) as u32;
+        let offsets_written =
+            PsbValue::IntArray(PsbUintArray::from(offset_list)).write_bytes(stream)?;
 
-        let lengths_pos = (stream.seek(SeekFrom::Current(0)).unwrap()) as u32;
-        let lengths_written = PsbValue::IntArray(PsbUintArray::from(length_list)).write_bytes(stream)?;
+        let lengths_pos = (stream.stream_position().unwrap()) as u32;
+        let lengths_written =
+            PsbValue::IntArray(PsbUintArray::from(length_list)).write_bytes(stream)?;
 
-        let data_pos = (stream.seek(SeekFrom::Current(0)).unwrap()) as u32;
+        let data_pos = (stream.stream_position().unwrap()) as u32;
         let mut data_written = 0_u64;
         for res in resources.iter() {
             data_written += res.len() as u64;
             stream.write_all(res)?;
         }
 
-        Ok((offsets_written + lengths_written + data_written, PsbResourcesOffset {
-            offset_pos,
-            lengths_pos,
-            data_pos
-        }))
+        Ok((
+            offsets_written + lengths_written + data_written,
+            PsbResourcesOffset {
+                offset_pos,
+                lengths_pos,
+                data_pos,
+            },
+        ))
     }
 
     /// Write strings. Returns written size, PsbStringOffset tuple
-    pub fn write_strings(strings: &Vec<String>, stream: &mut T) -> Result<(u64, PsbStringOffset), PsbError> {
+    pub fn write_strings(
+        strings: &[String],
+        stream: &mut T,
+    ) -> Result<(u64, PsbStringOffset), PsbError> {
         let mut offset_list = Vec::<u64>::new();
 
         let mut total_len = 0_u64;
         for string in strings.iter() {
-            let len = string.as_bytes().len() as u64;
-            
+            let len = string.len() as u64;
+
             offset_list.push(total_len);
 
             total_len += len + 1;
         }
 
-        let offset_pos = stream.seek(SeekFrom::Current(0)).unwrap() as u32;
-        let offset_written = PsbValue::IntArray(PsbUintArray::from(offset_list)).write_bytes(stream)?;
+        let offset_pos = stream.stream_position().unwrap() as u32;
+        let offset_written =
+            PsbValue::IntArray(PsbUintArray::from(offset_list)).write_bytes(stream)?;
 
-        let data_pos = stream.seek(SeekFrom::Current(0)).unwrap() as u32;
+        let data_pos = stream.stream_position().unwrap() as u32;
         for string in strings.iter() {
             stream.write_all(string.as_bytes())?;
             stream.write_u8(0)?;
         }
 
-        Ok((offset_written + total_len as u64, PsbStringOffset {
-            offset_pos,
-            data_pos
-        }))
+        Ok((
+            offset_written + total_len,
+            PsbStringOffset {
+                offset_pos,
+                data_pos,
+            },
+        ))
     }
-
 }
 
 pub struct MdfWriter<R, W> {
-
     read: R,
-    stream: W
-
+    stream: W,
 }
 
 impl<R: Read, W: Write + Seek> MdfWriter<R, W> {
-
     pub fn new(read: R, stream: W) -> Self {
-        Self {
-            read,
-            stream
-        }
+        Self { read, stream }
     }
 
     /// Write mdf file.
@@ -231,40 +235,39 @@ impl<R: Read, W: Write + Seek> MdfWriter<R, W> {
         // Write signature first
         self.stream.write_u32::<LittleEndian>(PSB_MDF_SIGNATURE)?;
 
-        let header_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
+        let header_pos = self.stream.stream_position().unwrap();
         // Prefill header
         MdfHeader { size: 0 }.write_bytes(&mut self.stream)?;
-        
+
         io::copy(&mut encoder, &mut self.stream)?;
         let total_out = encoder.total_out();
 
-        let end_pos = self.stream.seek(SeekFrom::Current(0)).unwrap();
+        let end_pos = self.stream.stream_position().unwrap();
 
         // Fill header
         self.stream.seek(SeekFrom::Start(header_pos)).unwrap();
-        MdfHeader { size: total_out as u32 }.write_bytes(&mut self.stream)?;
+        MdfHeader {
+            size: total_out as u32,
+        }
+        .write_bytes(&mut self.stream)?;
 
         self.stream.seek(SeekFrom::Start(end_pos)).unwrap();
         Ok(total_out + 8)
     }
-
 }
 
 pub struct PsbMdfWriter<T> {
-
     buffer: Cursor<Vec<u8>>,
     psb: VirtualPsb,
-    stream: T
-
+    stream: T,
 }
 
 impl<T: Write + Seek> PsbMdfWriter<T> {
-
     pub fn new(psb: VirtualPsb, stream: T) -> Self {
         Self {
             buffer: Default::default(),
             psb,
-            stream
+            stream,
         }
     }
 
