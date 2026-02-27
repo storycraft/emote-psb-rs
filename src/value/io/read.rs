@@ -1,5 +1,4 @@
 use core::pin::pin;
-use std::io;
 
 use async_stream::try_stream;
 use futures_core::Stream;
@@ -9,14 +8,14 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt};
 use crate::value::{
     PsbPrimitive,
     io::{
-        PSB_COMPILER_ARRAY, PSB_COMPILER_BINARY_TREE, PSB_COMPILER_BOOL, PSB_COMPILER_INTEGER,
-        PSB_COMPILER_RESOURCE, PSB_COMPILER_STRING, PSB_TYPE_DOUBLE, PSB_TYPE_EXTRA_N,
-        PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0, PSB_TYPE_INTEGER_ARRAY_N,
-        PSB_TYPE_INTEGER_N, PSB_TYPE_LIST, PSB_TYPE_NONE, PSB_TYPE_NULL, PSB_TYPE_OBJECT,
-        PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE, error::PsbValueReadError,
+        PSB_COMPILER_ARRAY, PSB_COMPILER_BINARY_TREE, PSB_COMPILER_BOOL, PSB_COMPILER_DECIMAL,
+        PSB_COMPILER_INTEGER, PSB_COMPILER_RESOURCE, PSB_COMPILER_STRING, PSB_TYPE_DOUBLE,
+        PSB_TYPE_EXTRA_N, PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0,
+        PSB_TYPE_INTEGER_ARRAY_N, PSB_TYPE_INTEGER_N, PSB_TYPE_LIST, PSB_TYPE_NONE, PSB_TYPE_NULL,
+        PSB_TYPE_OBJECT, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE,
+        error::PsbValueReadError,
     },
     number::PsbNumber,
-    reference::{PsbNameIndex, PsbResource, PsbString},
     utill::PsbValueStreamExt,
 };
 
@@ -101,7 +100,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
     /// Read stream of names and positions in object
     pub fn read_object(
         &mut self,
-    ) -> impl Stream<Item = Result<(PsbNameIndex, u64), PsbValueReadError>>
+    ) -> impl Stream<Item = Result<(u64, u64), PsbValueReadError>>
     where
         T: AsyncSeek,
     {
@@ -126,12 +125,15 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
                     return;
                 };
 
-                yield (PsbNameIndex(name), object_start + offset);
+                yield (name, object_start + offset);
             }
         )
     }
 
-    async fn read_primitive(&mut self, value_type: u8) -> io::Result<Option<PsbPrimitive>> {
+    async fn read_primitive(
+        &mut self,
+        value_type: u8,
+    ) -> Result<Option<PsbPrimitive>, PsbValueReadError> {
         const PSB_TYPE_INTEGER_START: u8 = PSB_TYPE_INTEGER_N;
         const PSB_TYPE_INTEGER_MAX: u8 = PSB_TYPE_INTEGER_N + 8;
         const PSB_TYPE_RESOURCE_START: u8 = PSB_TYPE_RESOURCE_N + 1;
@@ -165,33 +167,38 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
             }
 
             value_type @ PSB_TYPE_RESOURCE_START..=PSB_TYPE_RESOURCE_MAX => {
-                Ok(Some(PsbPrimitive::Resource(PsbResource(
+                Ok(Some(PsbPrimitive::Resource(
                     self.stream
                         .read_partial_uint(value_type - PSB_TYPE_RESOURCE_N)
-                        .await?,
-                ))))
+                        .await?
+                        .try_into()
+                        .map_err(|_| PsbValueReadError::InvalidValue)?,
+                )))
             }
 
             value_type @ PSB_TYPE_STRING_START..=PSB_TYPE_STRING_MAX => {
-                Ok(Some(PsbPrimitive::String(PsbString(
+                Ok(Some(PsbPrimitive::String(
                     self.stream
                         .read_partial_uint(value_type - PSB_TYPE_STRING_N)
-                        .await?,
-                ))))
+                        .await?
+                        .try_into()
+                        .map_err(|_| PsbValueReadError::InvalidValue)?,
+                )))
             }
 
             value_type @ PSB_TYPE_EXTRA_START..=PSB_TYPE_EXTRA_MAX => {
-                Ok(Some(PsbPrimitive::ExtraResource(PsbResource(
+                Ok(Some(PsbPrimitive::ExtraResource(
                     self.stream
                         .read_partial_uint(value_type - PSB_TYPE_EXTRA_N)
                         .await?,
-                ))))
+                )))
             }
 
             PSB_COMPILER_INTEGER => Ok(Some(PsbPrimitive::CompilerNumber)),
             PSB_COMPILER_STRING => Ok(Some(PsbPrimitive::CompilerString)),
             PSB_COMPILER_RESOURCE => Ok(Some(PsbPrimitive::CompilerResource)),
             PSB_COMPILER_ARRAY => Ok(Some(PsbPrimitive::CompilerArray)),
+            PSB_COMPILER_DECIMAL => Ok(Some(PsbPrimitive::CompilerDecimal)),
             PSB_COMPILER_BOOL => Ok(Some(PsbPrimitive::CompilerBool)),
             PSB_COMPILER_BINARY_TREE => Ok(Some(PsbPrimitive::CompilerBinaryTree)),
 

@@ -2,15 +2,10 @@ pub mod binary_tree;
 pub mod collection;
 pub mod io;
 pub mod number;
-pub mod reference;
 mod utill;
 
 use collection::{PsbList, PsbObject, PsbUintArray};
 use number::PsbNumber;
-
-use crate::value::reference::PsbString;
-
-use self::reference::PsbResource;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -21,9 +16,9 @@ pub enum PsbPrimitive {
     Bool(bool),
     Number(PsbNumber),
 
-    String(PsbString),
-    Resource(PsbResource),
-    ExtraResource(PsbResource),
+    String(u32),
+    Resource(u32),
+    ExtraResource(u64),
 
     CompilerNumber,
     CompilerString,
