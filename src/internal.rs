@@ -1,11 +1,5 @@
 use std::io::{Read, Seek, Write};
 
-/*
- * Created on Tue Jan 12 2021
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 #[derive(Debug)]
 pub struct SafeIndexVec<T> {
     vec: Vec<T>,

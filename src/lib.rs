@@ -1,9 +1,3 @@
-/*
- * Created on Fri Dec 25 2020
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 pub mod types;
 
 pub mod header;
@@ -297,12 +291,8 @@ impl<T: Read + Seek> PsbFile<T> {
         for i in 0..resource_offsets.len() {
             let mut buffer = Vec::new();
 
-            stream.seek(SeekFrom::Start(
-                table.data_pos as u64 + resource_offsets[i],
-            ))?;
-            stream
-                .take(resource_lengths[i])
-                .read_to_end(&mut buffer)?;
+            stream.seek(SeekFrom::Start(table.data_pos as u64 + resource_offsets[i]))?;
+            stream.take(resource_lengths[i]).read_to_end(&mut buffer)?;
 
             resources.push(buffer);
         }

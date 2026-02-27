@@ -1,9 +1,3 @@
-/*
- * Created on Wed Jan 13 2021
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, fs::File};

@@ -1,9 +1,3 @@
-/*
- * Created on Fri Dec 25 2020
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom, Write};
 
 use adler::Adler32;
@@ -76,15 +70,13 @@ impl<T: Write + Seek> PsbWriter<T> {
 
         // Names
         {
-            offsets.name_offset =
-                (self.stream.stream_position().unwrap() - file_start) as u32;
+            offsets.name_offset = (self.stream.stream_position().unwrap() - file_start) as u32;
             Self::write_names(refs.names(), &mut self.stream)?;
         }
 
         // Root Entry
         {
-            offsets.entry_point =
-                (self.stream.stream_position().unwrap() - file_start) as u32;
+            offsets.entry_point = (self.stream.stream_position().unwrap() - file_start) as u32;
             PsbValue::Object(root).write_bytes_refs(&mut self.stream, &refs)?;
         }
 

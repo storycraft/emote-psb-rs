@@ -1,9 +1,3 @@
-/*
- * Created on Sun Dec 27 2020
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 use std::{
     collections::{hash_map, HashMap},
     io::{Read, Seek, Write},
@@ -257,21 +251,13 @@ impl TreeNode {
     }
 
     pub fn get_or_insert(&mut self, value: u8) -> &Self {
-        self.children.entry(value).or_insert_with(|| {
-            
-
-            Self::new()
-        });
+        self.children.entry(value).or_insert_with(|| Self::new());
 
         self.children.get(&value).unwrap()
     }
 
     pub fn get_or_insert_mut(&mut self, value: u8) -> &mut Self {
-        self.children.entry(value).or_insert_with(|| {
-            
-
-            Self::new()
-        });
+        self.children.entry(value).or_insert_with(|| Self::new());
 
         self.children.get_mut(&value).unwrap()
     }

@@ -1,9 +1,3 @@
-/*
- * Created on Tue Jan 12 2021
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 use std::io::{Read, Write};
 
 use crate::{PsbError, PsbErrorKind};
@@ -100,8 +94,7 @@ impl Default for PsbOffsets {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct PsbResourcesOffset {
     pub offset_pos: u32,
     pub lengths_pos: u32,
@@ -129,9 +122,7 @@ impl PsbResourcesOffset {
     }
 }
 
-
-#[derive(Debug, Clone, Copy)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct PsbStringOffset {
     pub offset_pos: u32,
     pub data_pos: u32,
@@ -155,4 +146,3 @@ impl PsbStringOffset {
         Ok(8)
     }
 }
-

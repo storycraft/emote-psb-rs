@@ -1,9 +1,3 @@
-/*
- * Created on Tue Jan 12 2021
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 use std::io::{Read, Write};
 
 use crate::{PsbError, PsbErrorKind, PsbRefs};

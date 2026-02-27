@@ -1,9 +1,3 @@
-/*
- * Created on Fri Dec 25 2020
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 use std::{
     collections::{hash_map, HashMap},
     io::{Read, Seek, SeekFrom, Write},

@@ -1,9 +1,3 @@
-/*
- * Created on Fri Dec 25 2020
- *
- * Copyright (c) storycraft. Licensed under the MIT Licence.
- */
-
 use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
