@@ -29,6 +29,9 @@ pub enum PsbPrimitive {
     CompilerBinaryTree,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From)]
+pub struct PsbNameIndex(#[from] pub u64);
+
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
