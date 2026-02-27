@@ -14,8 +14,8 @@ use tokio::io::{
 };
 
 use crate::{
-    mdf::error::{MdfCreateError, MdfOpenError},
     PSB_MDF_SIGNATURE,
+    mdf::error::{MdfCreateError, MdfOpenError},
 };
 
 #[pin_project]

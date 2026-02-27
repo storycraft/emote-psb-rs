@@ -5,12 +5,12 @@ mod types;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek};
 
 use crate::{
+    PSB_SIGNATURE,
     psb::{
         error::PsbOpenError,
         table::{PsbResourceTable, PsbStringTable},
     },
     value::binary_tree::PsbBinaryTree,
-    PSB_SIGNATURE,
 };
 
 #[derive(Debug, Clone)]

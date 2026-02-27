@@ -119,7 +119,7 @@ mod tests {
     use core::error::Error;
     use emote_psb::{psb::PsbFile, value::PsbValue};
     use mimalloc::MiMalloc;
-    use std::io::SeekFrom;
+    use std::{io::SeekFrom, time::Instant};
     use tokio::{
         fs::File,
         io::{AsyncSeekExt, BufReader},

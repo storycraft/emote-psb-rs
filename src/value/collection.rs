@@ -4,7 +4,7 @@ use crate::value::{error::PsbValueReadError, reference::PsbNameIndex, utill::Psb
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt};
 
-use super::{PsbValue, PSB_TYPE_INTEGER_ARRAY_N};
+use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

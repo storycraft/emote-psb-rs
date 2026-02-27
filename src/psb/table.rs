@@ -2,7 +2,7 @@ use std::io::SeekFrom;
 
 use tokio::io::{AsyncRead, AsyncSeek, AsyncSeekExt};
 
-use crate::value::{collection::PsbUintArray, error::PsbValueReadError, PsbValue};
+use crate::value::{PsbValue, collection::PsbUintArray, error::PsbValueReadError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub struct PsbStringItem {
