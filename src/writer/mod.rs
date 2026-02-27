@@ -1,13 +1,16 @@
-use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom, Write};
+pub mod error;
+
+use std::io::{self, Seek, SeekFrom, Write};
 
 use adler::Adler32;
-use byteorder::{LittleEndian, WriteBytesExt};
-use flate2::{bufread::ZlibEncoder, Compression};
+use async_compression::tokio::write::ZlibEncoder;
+use pin_project::pin_project;
+use tokio::io::{AsyncSeek, AsyncSeekExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
-    header::MdfHeader,
     offsets::{PsbOffsets, PsbResourcesOffset, PsbStringOffset},
-    types::{binary_tree::PsbBinaryTree, collection::PsbUintArray, PsbValue},
+    value::{binary_tree::PsbBinaryTree, collection::PsbUintArray, PsbValue},
+    writer::error::MdfCreateError,
     PsbError, PsbRefs, VirtualPsb, PSB_MDF_SIGNATURE, PSB_SIGNATURE,
 };
 
@@ -204,73 +207,5 @@ impl<T: Write + Seek> PsbWriter<T> {
                 data_pos,
             },
         ))
-    }
-}
-
-pub struct MdfWriter<R, W> {
-    read: R,
-    stream: W,
-}
-
-impl<R: Read, W: Write + Seek> MdfWriter<R, W> {
-    pub fn new(read: R, stream: W) -> Self {
-        Self { read, stream }
-    }
-
-    /// Write mdf file.
-    /// Returns written size
-    pub fn finish(mut self) -> Result<u64, PsbError> {
-        let mut reader = BufReader::new(self.read);
-
-        let mut encoder = ZlibEncoder::new(&mut reader, Compression::best());
-
-        // Write signature first
-        self.stream.write_u32::<LittleEndian>(PSB_MDF_SIGNATURE)?;
-
-        let header_pos = self.stream.stream_position().unwrap();
-        // Prefill header
-        MdfHeader { size: 0 }.write_bytes(&mut self.stream)?;
-
-        io::copy(&mut encoder, &mut self.stream)?;
-        let total_out = encoder.total_out();
-
-        let end_pos = self.stream.stream_position().unwrap();
-
-        // Fill header
-        self.stream.seek(SeekFrom::Start(header_pos)).unwrap();
-        MdfHeader {
-            size: total_out as u32,
-        }
-        .write_bytes(&mut self.stream)?;
-
-        self.stream.seek(SeekFrom::Start(end_pos)).unwrap();
-        Ok(total_out + 8)
-    }
-}
-
-pub struct PsbMdfWriter<T> {
-    buffer: Cursor<Vec<u8>>,
-    psb: VirtualPsb,
-    stream: T,
-}
-
-impl<T: Write + Seek> PsbMdfWriter<T> {
-    pub fn new(psb: VirtualPsb, stream: T) -> Self {
-        Self {
-            buffer: Default::default(),
-            psb,
-            stream,
-        }
-    }
-
-    /// Write mdf file.
-    /// Returns written size
-    pub fn finish(mut self) -> Result<u64, PsbError> {
-        let psb_writer = PsbWriter::new(self.psb, &mut self.buffer);
-        psb_writer.finish()?;
-
-        let mdf_writer = MdfWriter::new(self.buffer, self.stream);
-
-        mdf_writer.finish()
     }
 }

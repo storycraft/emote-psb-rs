@@ -1,21 +1,29 @@
-use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
+use std::io::{self, BufRead, Read, Seek, SeekFrom};
 
-use byteorder::{LittleEndian, ReadBytesExt};
+use async_compression::tokio::bufread::ZlibDecoder;
 use encoding::{all::UTF_8, Encoding};
-use flate2::read::ZlibDecoder;
+use pin_project::pin_project;
+use tokio::io::{AsyncRead, AsyncReadExt, BufReader, ReadBuf, Take};
 
 use crate::{
-    header::{MdfHeader, PsbHeader},
+    header::PsbHeader,
     offsets::PsbOffsets,
-    types::{binary_tree::PsbBinaryTree, PsbValue},
-    PsbError, PsbErrorKind, PsbFile, PsbRefs, PSB_MDF_SIGNATURE, PSB_SIGNATURE,
+    reader::error::{MdfOpenError, PsbOpenError},
+    value::{binary_tree::PsbBinaryTree, PsbValue},
+    PsbError, PsbErrorKind, PsbRefs, PSB_MDF_SIGNATURE, PSB_SIGNATURE,
 };
 
-pub struct PsbReader;
+pub struct PsbFile {
+    pub version: u16,
+    pub encrypted: bool,
+}
 
-impl PsbReader {
-    /// Read as PsbFile
-    pub fn open_psb<T: Read + Seek>(mut stream: T) -> Result<PsbFile<T>, PsbError> {
+impl PsbFile {
+    pub fn open_psb<T: Read + Seek>(mut stream: T) -> Result<Self, PsbError> {
         let start = stream.stream_position().unwrap();
 
         let signature = stream.read_u32::<LittleEndian>()?;
@@ -88,31 +96,5 @@ impl PsbReader {
         }
 
         Ok((offsets_read + read as u64, strings))
-    }
-}
-
-pub struct MdfReader;
-
-impl MdfReader {
-    pub fn open_mdf<T: Read + Seek>(mut stream: T) -> Result<PsbFile<Cursor<Vec<u8>>>, PsbError> {
-        let signature = stream.read_u32::<LittleEndian>()?;
-        if signature != PSB_MDF_SIGNATURE {
-            return Err(PsbError::new(PsbErrorKind::InvalidFile, None));
-        }
-
-        let (_, mdf_header) = MdfHeader::from_bytes(&mut stream)?;
-
-        let mut compressed_buffer = Vec::new();
-
-        stream
-            .take(mdf_header.size as u64)
-            .read_to_end(&mut compressed_buffer)?;
-
-        let mut decoder = ZlibDecoder::new(&compressed_buffer[..]);
-
-        let mut buffer = Vec::new();
-        decoder.read_to_end(&mut buffer)?;
-
-        PsbReader::open_psb(Cursor::new(buffer))
     }
 }

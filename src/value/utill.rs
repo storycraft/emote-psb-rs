@@ -1,11 +1,15 @@
+use std::io;
+
+use tokio::io::{AsyncRead, AsyncReadExt};
+
 use std::io::{Read, Seek, Write};
 
 #[derive(Debug)]
-pub struct SafeIndexVec<T> {
+pub struct SparseVec<T> {
     vec: Vec<T>,
 }
 
-impl<T: Default + Clone> SafeIndexVec<T> {
+impl<T: Default + Clone> SparseVec<T> {
     pub fn new() -> Self {
         Self { vec: Vec::new() }
     }
@@ -107,5 +111,28 @@ impl<T: Read + Seek> Read for XorShiftStream<T> {
         }
 
         Ok(read)
+    }
+}
+
+#[extend::ext(name = PsbValueStreamExt)]
+pub impl<T: AsyncRead + Unpin> T {
+    async fn read_partial_uint(&mut self, size: u8) -> io::Result<u64> {
+        match size {
+            0 => Ok(0),
+            1..=8 => {
+                let mut buf = [0_u8; 8];
+                self.read_exact(&mut buf[..size as usize]).await?;
+
+                Ok(u64::from_le_bytes(buf))
+            }
+
+            _ => Err(io::Error::from(io::ErrorKind::InvalidInput)),
+        }
+    }
+
+    async fn read_partial_int(&mut self, size: u8) -> io::Result<i64> {
+        Ok(i64::from_ne_bytes(
+            self.read_partial_uint(size).await?.to_ne_bytes(),
+        ))
     }
 }
