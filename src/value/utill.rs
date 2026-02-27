@@ -2,8 +2,6 @@ use std::io;
 
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use std::io::{Read, Seek, Write};
-
 #[derive(Debug)]
 pub struct SparseVec<T> {
     vec: Vec<T>,
@@ -39,82 +37,7 @@ impl<T: Default + Clone> SparseVec<T> {
     }
 }
 
-pub struct XorShiftStream<T> {
-    stream: T,
-
-    read_seeds: [u32; 4],
-    write_seeds: [u32; 4],
-}
-
-impl<T> XorShiftStream<T> {
-    pub fn new(stream: T, seeds: [u32; 4]) -> Self {
-        Self {
-            stream,
-            read_seeds: seeds,
-            write_seeds: seeds,
-        }
-    }
-
-    pub fn new_emote(stream: T, key: u32) -> Self {
-        Self::new(stream, [123456789, 362436069, 521288629, key])
-    }
-
-    fn next_read(&mut self) -> u32 {
-        Self::next(&mut self.read_seeds)
-    }
-
-    fn next_write(&mut self) -> u32 {
-        Self::next(&mut self.write_seeds)
-    }
-
-    fn next(seeds: &mut [u32; 4]) -> u32 {
-        let x = seeds[0] ^ (seeds[0] << 11);
-
-        seeds[0] = seeds[1];
-        seeds[1] = seeds[2];
-        seeds[2] = seeds[3];
-
-        seeds[3] = (seeds[3] ^ (seeds[3] >> 19)) ^ (x ^ (x >> 8));
-
-        seeds[3]
-    }
-}
-
-impl<T: Write + Seek> Write for XorShiftStream<T> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let current = self.stream.stream_position().unwrap() as usize;
-
-        let arr = self.next_write().to_le_bytes();
-
-        self.stream.write(
-            &buf.iter()
-                .enumerate()
-                .map(|(i, &val)| val ^ arr[(current + i) % 4])
-                .collect::<Vec<u8>>(),
-        )
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.stream.flush()
-    }
-}
-
-impl<T: Read + Seek> Read for XorShiftStream<T> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let current = self.stream.stream_position().unwrap() as usize;
-
-        let read = self.stream.read(buf)?;
-        let arr = self.next_read().to_le_bytes();
-
-        for i in 0..read {
-            buf[i] ^= arr[(current + i) % 4];
-        }
-
-        Ok(read)
-    }
-}
-
-#[extend::ext(name = PsbValueStreamExt)]
+#[extend::ext(name = PsbValueReadExt)]
 pub impl<T: AsyncRead + Unpin> T {
     async fn read_partial_uint(&mut self, size: u8) -> io::Result<u64> {
         match size {
@@ -134,5 +57,49 @@ pub impl<T: AsyncRead + Unpin> T {
         Ok(i64::from_ne_bytes(
             self.read_partial_uint(size).await?.to_ne_bytes(),
         ))
+    }
+}
+
+pub fn get_n(mut number: i64) -> u8 {
+    if number < 0 {
+        number = -number;
+    }
+
+    if number <= 0x7f {
+        1
+    } else if number <= 0x7fff {
+        2
+    } else if number <= 0x7fffff {
+        3
+    } else if number <= 0x7fffffff {
+        4
+    } else if number <= 0x7fffffffff {
+        5
+    } else if number <= 0x7fffffffffff {
+        6
+    } else if number <= 0x7fffffffffffff {
+        7
+    } else {
+        8
+    }
+}
+
+pub fn get_uint_n(number: u64) -> u8 {
+    if number <= 0xff {
+        1
+    } else if number <= 0xffff {
+        2
+    } else if number <= 0xffffff {
+        3
+    } else if number <= 0xffffffff {
+        4
+    } else if number <= 0xffffffffff {
+        5
+    } else if number <= 0xffffffffffff {
+        6
+    } else if number <= 0xffffffffffffff {
+        7
+    } else {
+        8
     }
 }

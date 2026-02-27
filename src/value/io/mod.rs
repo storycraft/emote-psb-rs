@@ -1,5 +1,6 @@
 pub mod error;
 pub mod read;
+pub mod write;
 
 pub const PSB_TYPE_NONE: u8 = 0x00;
 

@@ -6,17 +6,14 @@ use futures_util::TryStreamExt;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt};
 
 use crate::value::{
-    PsbPrimitive,
-    io::{
+    PsbNameIndex, PsbPrimitive, io::{
         PSB_COMPILER_ARRAY, PSB_COMPILER_BINARY_TREE, PSB_COMPILER_BOOL, PSB_COMPILER_DECIMAL,
         PSB_COMPILER_INTEGER, PSB_COMPILER_RESOURCE, PSB_COMPILER_STRING, PSB_TYPE_DOUBLE,
         PSB_TYPE_EXTRA_N, PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0,
         PSB_TYPE_INTEGER_ARRAY_N, PSB_TYPE_INTEGER_N, PSB_TYPE_LIST, PSB_TYPE_NONE, PSB_TYPE_NULL,
         PSB_TYPE_OBJECT, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE,
         error::PsbValueReadError,
-    },
-    number::PsbNumber,
-    utill::PsbValueStreamExt,
+    }, number::PsbNumber, utill::PsbValueReadExt
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -100,7 +97,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
     /// Read stream of names and positions in object
     pub fn read_object(
         &mut self,
-    ) -> impl Stream<Item = Result<(u64, u64), PsbValueReadError>>
+    ) -> impl Stream<Item = Result<(PsbNameIndex, u64), PsbValueReadError>>
     where
         T: AsyncSeek,
     {
@@ -125,7 +122,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
                     return;
                 };
 
-                yield (name, object_start + offset);
+                yield (PsbNameIndex(name), object_start + offset);
             }
         )
     }
