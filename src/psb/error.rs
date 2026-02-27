@@ -2,7 +2,7 @@ use std::io;
 
 use thiserror::Error;
 
-use crate::value::error::PsbValueReadError;
+use crate::value::io::error::PsbValueReadError;
 
 #[derive(Debug, Error)]
 pub enum PsbOpenError {

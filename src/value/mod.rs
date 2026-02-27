@@ -1,69 +1,27 @@
 pub mod binary_tree;
 pub mod collection;
-pub mod error;
+pub mod io;
 pub mod number;
 pub mod reference;
 mod utill;
 
 use collection::{PsbList, PsbObject, PsbUintArray};
 use number::PsbNumber;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek};
 
-use crate::value::{error::PsbValueReadError, reference::PsbString, utill::PsbValueStreamExt};
+use crate::value::reference::PsbString;
 
 use self::reference::PsbResource;
 
-pub const PSB_TYPE_NONE: u8 = 0x00;
-
-pub const PSB_TYPE_NULL: u8 = 0x01;
-
-pub const PSB_TYPE_FALSE: u8 = 0x02;
-pub const PSB_TYPE_TRUE: u8 = 0x03;
-
-/// 0 <= N <= 8
-pub const PSB_TYPE_INTEGER_N: u8 = 0x04;
-pub const PSB_TYPE_FLOAT0: u8 = 0x1d;
-pub const PSB_TYPE_FLOAT: u8 = 0x1e;
-pub const PSB_TYPE_DOUBLE: u8 = 0x1f;
-
-/// 1 <= N <= 8
-pub const PSB_TYPE_INTEGER_ARRAY_N: u8 = 0x0C;
-
-/// 1 <= N <= 4
-pub const PSB_TYPE_STRING_N: u8 = 0x14;
-
-/// 1 <= N <= 4
-pub const PSB_TYPE_RESOURCE_N: u8 = 0x18;
-
-pub const PSB_TYPE_LIST: u8 = 0x20;
-pub const PSB_TYPE_OBJECT: u8 = 0x21;
-
-/// 1 <= N <= 8
-pub const PSB_TYPE_EXTRA_N: u8 = 0x21;
-
-pub const PSB_COMPILER_INTEGER: u8 = 0x80;
-pub const PSB_COMPILER_STRING: u8 = 0x81;
-pub const PSB_COMPILER_RESOURCE: u8 = 0x82;
-pub const PSB_COMPILER_DECIMAL: u8 = 0x83;
-pub const PSB_COMPILER_ARRAY: u8 = 0x84;
-pub const PSB_COMPILER_BOOL: u8 = 0x85;
-pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
-pub enum PsbValue {
+pub enum PsbPrimitive {
     None,
     Null,
     Bool(bool),
     Number(PsbNumber),
-    IntArray(PsbUintArray),
 
     String(PsbString),
-
-    List(PsbList),
-    Object(PsbObject),
-
     Resource(PsbResource),
     ExtraResource(PsbResource),
 
@@ -76,115 +34,17 @@ pub enum PsbValue {
     CompilerBinaryTree,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(untagged))]
+pub enum PsbValue {
+    Primitive(PsbPrimitive),
+    IntArray(PsbUintArray),
+    List(PsbList),
+    Object(PsbObject),
+}
+
 impl PsbValue {
-    /// Non recursed types
-    async fn read_io_non_recursion_typed(
-        value_type: u8,
-        stream: &mut (impl AsyncRead + Unpin),
-    ) -> Result<PsbValue, PsbValueReadError> {
-        const PSB_TYPE_INTEGER_START: u8 = PSB_TYPE_INTEGER_N;
-        const PSB_TYPE_INTEGER_MAX: u8 = PSB_TYPE_INTEGER_N + 8;
-        const PSB_TYPE_INTEGER_ARRAY_START: u8 = PSB_TYPE_INTEGER_ARRAY_N + 1;
-        const PSB_TYPE_INTEGER_ARRAY_MAX: u8 = PSB_TYPE_INTEGER_ARRAY_N + 8;
-        const PSB_TYPE_RESOURCE_START: u8 = PSB_TYPE_RESOURCE_N + 1;
-        const PSB_TYPE_RESOURCE_MAX: u8 = PSB_TYPE_RESOURCE_N + 4;
-        const PSB_TYPE_STRING_START: u8 = PSB_TYPE_STRING_N + 1;
-        const PSB_TYPE_STRING_MAX: u8 = PSB_TYPE_STRING_N + 4;
-        const PSB_TYPE_EXTRA_START: u8 = PSB_TYPE_EXTRA_N + 1;
-        const PSB_TYPE_EXTRA_MAX: u8 = PSB_TYPE_EXTRA_N + 8;
-
-        match value_type {
-            PSB_TYPE_NONE => Ok(PsbValue::None),
-            PSB_TYPE_NULL => Ok(PsbValue::Null),
-
-            PSB_TYPE_FALSE => Ok(PsbValue::Bool(false)),
-            PSB_TYPE_TRUE => Ok(PsbValue::Bool(true)),
-
-            PSB_TYPE_DOUBLE => Ok(PsbValue::Number(PsbNumber::Double(
-                stream.read_f64_le().await?,
-            ))),
-            PSB_TYPE_FLOAT0 => Ok(PsbValue::Number(PsbNumber::Float(0.0))),
-            PSB_TYPE_FLOAT => Ok(PsbValue::Number(PsbNumber::Float(
-                stream.read_f32_le().await?,
-            ))),
-
-            value_type @ PSB_TYPE_INTEGER_START..=PSB_TYPE_INTEGER_MAX => {
-                Ok(PsbValue::Number(PsbNumber::Integer(
-                    stream
-                        .read_partial_int(value_type - PSB_TYPE_INTEGER_N)
-                        .await?,
-                )))
-            }
-
-            value_type @ PSB_TYPE_INTEGER_ARRAY_START..=PSB_TYPE_INTEGER_ARRAY_MAX => {
-                let len = stream
-                    .read_partial_uint(value_type - PSB_TYPE_INTEGER_ARRAY_N)
-                    .await?;
-                Ok(PsbValue::IntArray(
-                    PsbUintArray::read_io(stream, len as usize).await?,
-                ))
-            }
-
-            value_type @ PSB_TYPE_RESOURCE_START..=PSB_TYPE_RESOURCE_MAX => {
-                Ok(PsbValue::Resource(PsbResource(
-                    stream
-                        .read_partial_uint(value_type - PSB_TYPE_RESOURCE_N)
-                        .await?,
-                )))
-            }
-
-            value_type @ PSB_TYPE_STRING_START..=PSB_TYPE_STRING_MAX => {
-                Ok(PsbValue::String(PsbString(
-                    stream
-                        .read_partial_uint(value_type - PSB_TYPE_STRING_N)
-                        .await?,
-                )))
-            }
-
-            value_type @ PSB_TYPE_EXTRA_START..=PSB_TYPE_EXTRA_MAX => {
-                Ok(PsbValue::ExtraResource(PsbResource(
-                    stream
-                        .read_partial_uint(value_type - PSB_TYPE_EXTRA_N)
-                        .await?,
-                )))
-            }
-
-            PSB_COMPILER_INTEGER => Ok(PsbValue::CompilerNumber),
-            PSB_COMPILER_STRING => Ok(PsbValue::CompilerString),
-            PSB_COMPILER_RESOURCE => Ok(PsbValue::CompilerResource),
-            PSB_COMPILER_ARRAY => Ok(PsbValue::CompilerArray),
-            PSB_COMPILER_BOOL => Ok(PsbValue::CompilerBool),
-            PSB_COMPILER_BINARY_TREE => Ok(PsbValue::CompilerBinaryTree),
-
-            value_type => Err(PsbValueReadError::InvalidValueType(value_type)),
-        }
-    }
-
-    /// Types requires recursion
-    async fn read_io_typed(
-        value_type: u8,
-        stream: &mut (impl AsyncRead + AsyncSeek + Unpin),
-    ) -> Result<PsbValue, PsbValueReadError> {
-        match value_type {
-            PSB_TYPE_LIST => Ok(PsbValue::List(PsbList::read_io(stream).await?)),
-            PSB_TYPE_OBJECT => Ok(PsbValue::Object(PsbObject::read_io(stream).await?)),
-
-            value_type => Self::read_io_non_recursion_typed(value_type, stream).await,
-        }
-    }
-
-    pub async fn read_io(
-        stream: &mut (impl AsyncRead + AsyncSeek + Unpin),
-    ) -> Result<PsbValue, PsbValueReadError> {
-        Self::read_io_typed(stream.read_u8().await?, stream).await
-    }
-
-    pub(crate) async fn read_io_non_recursion(
-        stream: &mut (impl AsyncRead + Unpin),
-    ) -> Result<PsbValue, PsbValueReadError> {
-        Self::read_io_non_recursion_typed(stream.read_u8().await?, stream).await
-    }
-
     // pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
     //     match self {
     //         PsbValue::None => {

@@ -116,10 +116,11 @@ mod tests {
     //         .unwrap();
     // }
 
-    use core::error::Error;
-    use emote_psb::{psb::PsbFile, value::PsbValue};
+    use core::{error::Error, pin::pin};
+    use emote_psb::{psb::PsbFile, value::io::read::PsbValueReader};
+    use futures_util::TryStreamExt;
     use mimalloc::MiMalloc;
-    use std::{io::SeekFrom, time::Instant};
+    use std::io::SeekFrom;
     use tokio::{
         fs::File,
         io::{AsyncSeekExt, BufReader},
@@ -135,7 +136,14 @@ mod tests {
                 dbg!(&psb);
 
                 file.seek(SeekFrom::Start(psb.entrypoint as _)).await?;
-                let root = PsbValue::read_io(&mut file).await?;
+                let mut reader = PsbValueReader::new(&mut file);
+
+                reader.read_next().await?;
+
+                let mut stream = pin!(reader.read_object());
+                while let Some((name, position)) = stream.try_next().await? {
+                    dbg!((name, position));
+                }
 
                 Ok(())
             })

@@ -1,10 +1,17 @@
-use std::{collections::HashMap, io::SeekFrom};
+use std::collections::HashMap;
 
-use crate::value::{error::PsbValueReadError, reference::PsbNameIndex, utill::PsbValueStreamExt};
+use futures_util::TryStreamExt;
+use tokio::io::AsyncRead;
 
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt};
+use crate::value::{
+    io::{
+        error::PsbValueReadError,
+        read::{PsbStreamValue, PsbValueReader},
+    },
+    reference::PsbNameIndex,
+};
 
-use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue};
+use super::PsbValue;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -12,18 +19,22 @@ use super::{PSB_TYPE_INTEGER_ARRAY_N, PsbValue};
 pub struct PsbUintArray(#[from] pub Vec<u64>);
 
 impl PsbUintArray {
-    pub(super) async fn read_io(
-        stream: &mut (impl AsyncRead + Unpin),
-        len: usize,
+    pub async fn read(
+        reader: &mut PsbValueReader<impl AsyncRead + Unpin>,
     ) -> Result<Self, PsbValueReadError> {
-        let item_byte_size = stream.read_u8().await? - PSB_TYPE_INTEGER_ARRAY_N;
+        let PsbStreamValue::UintArray {
+            item_byte_size,
+            len,
+        } = reader.read_next().await?
+        else {
+            return Err(PsbValueReadError::InvalidValue);
+        };
 
-        let mut list = Vec::<u64>::with_capacity(len);
-        for _ in 0..len {
-            list.push(stream.read_partial_uint(item_byte_size).await?);
-        }
-
-        Ok(PsbUintArray(list))
+        let list = reader
+            .read_uint_array(item_byte_size, len)
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok(Self(list))
     }
 
     // pub fn write_bytes(&self, stream: &mut impl Write) -> Result<u64, PsbError> {
@@ -49,35 +60,6 @@ impl PsbUintArray {
 pub struct PsbList(#[from] pub Vec<PsbValue>);
 
 impl PsbList {
-    pub(super) async fn read_io(
-        stream: &mut (impl AsyncRead + AsyncSeek + Unpin),
-    ) -> Result<Self, PsbValueReadError> {
-        let PsbValue::IntArray(PsbUintArray(offsets)) =
-            PsbValue::read_io_non_recursion(stream).await?
-        else {
-            return Err(PsbValueReadError::InvalidValue);
-        };
-
-        if offsets.is_empty() {
-            return Ok(Self::default());
-        }
-
-        let values = Box::pin(async {
-            let start = stream.stream_position().await?;
-            let mut values = Vec::<PsbValue>::with_capacity(offsets.len());
-
-            for offset in offsets {
-                stream.seek(SeekFrom::Start(start + offset)).await?;
-                values.push(PsbValue::read_io(stream).await?);
-            }
-
-            Ok::<_, PsbValueReadError>(values)
-        })
-        .await?;
-
-        Ok(Self(values))
-    }
-
     // pub fn write_bytes(&self, stream: &mut impl Write, table: &PsbRefs) -> Result<u64, PsbError> {
     //     let mut value_offset_cache = HashMap::<u64, &PsbValue>::new();
 
@@ -116,42 +98,6 @@ impl PsbList {
 pub struct PsbObject(#[from] pub HashMap<PsbNameIndex, PsbValue>);
 
 impl PsbObject {
-    pub async fn read_io(
-        stream: &mut (impl AsyncRead + AsyncSeek + Unpin),
-    ) -> Result<Self, PsbValueReadError> {
-        let PsbValue::IntArray(PsbUintArray(names)) =
-            PsbValue::read_io_non_recursion(stream).await?
-        else {
-            return Err(PsbValueReadError::InvalidValue);
-        };
-
-        // TODO
-        let PsbValue::IntArray(PsbUintArray(offsets)) =
-            PsbValue::read_io_non_recursion(stream).await?
-        else {
-            return Err(PsbValueReadError::InvalidValue);
-        };
-
-        if names.is_empty() {
-            return Ok(Self::default());
-        }
-
-        let map = Box::pin(async {
-            let start = stream.stream_position().await?;
-            let mut map = HashMap::<PsbNameIndex, PsbValue>::with_capacity(names.len());
-            for (name, offset) in names.into_iter().zip(offsets.into_iter()) {
-                stream.seek(SeekFrom::Start(start + offset)).await?;
-                // TODO:: reduce alloc
-                map.insert(PsbNameIndex(name), PsbValue::read_io(stream).await?);
-            }
-
-            Ok::<_, PsbValueReadError>(map)
-        })
-        .await?;
-
-        Ok(Self(map))
-    }
-
     // pub fn write_bytes(
     //     &self,
     //     stream: &mut impl Write,

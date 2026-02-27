@@ -2,9 +2,10 @@ use std::collections::{HashMap, hash_map};
 
 use tokio::io::{AsyncRead, AsyncSeek, AsyncSeekExt};
 
-use crate::value::{collection::PsbUintArray, error::PsbValueReadError};
-
-use super::PsbValue;
+use crate::value::{
+    collection::PsbUintArray,
+    io::{error::PsbValueReadError, read::PsbValueReader},
+};
 
 /// Binary tree
 #[derive(Debug, Clone, Default, derive_more::From)]
@@ -21,21 +22,10 @@ impl PsbBinaryTree {
         stream
             .seek(std::io::SeekFrom::Start(name_offset as _))
             .await?;
-        let PsbValue::IntArray(PsbUintArray(offsets)) =
-            PsbValue::read_io_non_recursion(stream).await?
-        else {
-            return Err(PsbValueReadError::InvalidValue);
-        };
-        let PsbValue::IntArray(PsbUintArray(tree)) =
-            PsbValue::read_io_non_recursion(stream).await?
-        else {
-            return Err(PsbValueReadError::InvalidValue);
-        };
-        let PsbValue::IntArray(PsbUintArray(indexes)) =
-            PsbValue::read_io_non_recursion(stream).await?
-        else {
-            return Err(PsbValueReadError::InvalidValue);
-        };
+        let mut reader = PsbValueReader::new(stream);
+        let PsbUintArray(offsets) = PsbUintArray::read(&mut reader).await?;
+        let PsbUintArray(tree) = PsbUintArray::read(&mut reader).await?;
+        let PsbUintArray(indexes) = PsbUintArray::read(&mut reader).await?;
 
         let mut list = Vec::<Vec<u8>>::with_capacity(indexes.len());
 
