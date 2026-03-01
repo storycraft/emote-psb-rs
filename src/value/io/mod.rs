@@ -27,7 +27,7 @@ pub const PSB_TYPE_RESOURCE_N: u8 = 0x18;
 pub const PSB_TYPE_LIST: u8 = 0x20;
 pub const PSB_TYPE_OBJECT: u8 = 0x21;
 
-/// 1 <= N <= 8
+/// 1 <= N <= 4
 pub const PSB_TYPE_EXTRA_N: u8 = 0x21;
 
 pub const PSB_COMPILER_INTEGER: u8 = 0x80;

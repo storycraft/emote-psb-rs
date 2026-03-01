@@ -77,7 +77,7 @@ impl<T: AsyncWrite + Unpin> PsbValueWriter<T> {
                     .await?;
             }
             PsbPrimitive::ExtraResource(index) => {
-                let n = get_uint_n(index);
+                let n = get_uint_n(index as _);
                 self.stream.write_u8(PSB_TYPE_EXTRA_N + n).await?;
                 self.stream
                     .write_all(&index.to_le_bytes()[..n as usize])

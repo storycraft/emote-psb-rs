@@ -18,7 +18,7 @@ pub enum PsbPrimitive {
 
     String(u32),
     Resource(u32),
-    ExtraResource(u64),
+    ExtraResource(u32),
 
     CompilerNumber,
     CompilerString,

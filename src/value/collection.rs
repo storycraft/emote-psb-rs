@@ -4,11 +4,11 @@ use futures_util::TryStreamExt;
 use tokio::io::AsyncRead;
 
 use crate::value::{
+    PsbNameIndex,
     io::{
         error::PsbValueReadError,
         read::{PsbStreamValue, PsbValueReader},
     },
-    reference::PsbNameIndex,
 };
 
 use super::PsbValue;
