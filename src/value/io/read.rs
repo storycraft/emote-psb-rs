@@ -42,7 +42,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
         }
     }
 
-    pub async fn read_next(&mut self) -> Result<PsbStreamValue, PsbValueReadError> {
+    pub async fn next(&mut self) -> Result<PsbStreamValue, PsbValueReadError> {
         const PSB_TYPE_INTEGER_ARRAY_START: u8 = PSB_TYPE_INTEGER_ARRAY_N + 1;
         const PSB_TYPE_INTEGER_ARRAY_MAX: u8 = PSB_TYPE_INTEGER_ARRAY_N + 8;
 
@@ -73,7 +73,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
     }
 
     /// Read stream of u64 values
-    pub fn read_uint_array(
+    pub fn next_uint_array(
         &mut self,
         item_byte_size: u8,
         len: u64,
@@ -82,7 +82,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
     }
 
     /// Read stream of items in list
-    pub async fn read_list<'a>(&'a mut self) -> Result<PsbListAccess<'a, T>, PsbValueReadError>
+    pub async fn next_list<'a>(&'a mut self) -> Result<PsbListAccess<'a, T>, PsbValueReadError>
     where
         T: AsyncSeek,
     {
@@ -97,7 +97,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
     }
 
     /// Read streams of items in object
-    pub async fn read_object<'a>(&'a mut self) -> Result<PsbObjectAccess<'a, T>, PsbValueReadError>
+    pub async fn next_object<'a>(&'a mut self) -> Result<PsbObjectAccess<'a, T>, PsbValueReadError>
     where
         T: AsyncSeek,
     {
@@ -117,7 +117,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
         let PsbStreamValue::UintArray {
             item_byte_size,
             len,
-        } = self.read_next().await?
+        } = self.next().await?
         else {
             return Err(PsbValueReadError::InvalidValue);
         };

@@ -137,11 +137,11 @@ mod tests {
                 file.seek(SeekFrom::Start(psb.entrypoint as _)).await?;
                 let mut reader = PsbValueReader::new(&mut file);
 
-                reader.read_next().await?;
+                reader.next().await?;
 
-                let mut obj = reader.read_object().await?;
+                let mut obj = reader.next_object().await?;
                 while let Some((name, reader)) = obj.next().await? {
-                    let v = reader.read_next().await?;
+                    let v = reader.next().await?;
                     dbg!((name, v));
                 }
 

@@ -25,13 +25,13 @@ impl PsbUintArray {
         let PsbStreamValue::UintArray {
             item_byte_size,
             len,
-        } = reader.read_next().await?
+        } = reader.next().await?
         else {
             return Err(PsbValueReadError::InvalidValue);
         };
 
         let list = reader
-            .read_uint_array(item_byte_size, len)
+            .next_uint_array(item_byte_size, len)
             .try_collect::<Vec<_>>()
             .await?;
         Ok(Self(list))

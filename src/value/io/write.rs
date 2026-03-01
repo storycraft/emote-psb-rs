@@ -108,4 +108,8 @@ impl<T: AsyncWrite + Unpin> PsbValueWriter<T> {
 
         Ok(())
     }
+
+    pub async fn write_list() {
+        
+    }
 }
