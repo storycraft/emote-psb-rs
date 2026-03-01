@@ -1,4 +1,6 @@
-use core::{ops::Range, pin::pin};
+pub mod ext;
+
+use core::{num::NonZeroU8, ops::Range, pin::pin};
 use std::io::{self, SeekFrom};
 
 use async_stream::try_stream;
@@ -17,24 +19,24 @@ use crate::value::{
         error::PsbValueReadError,
     },
     number::PsbNumber,
-    utill::PsbValueReadExt,
+    utill::{read_partial_int, read_partial_uint},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PsbStreamValue {
     Primitive(PsbPrimitive),
-    UintArray { len: u64, item_byte_size: u8 },
+    UintArray { len: u64, item_byte_size: NonZeroU8 },
     List,
     Object,
 }
 
 #[derive(Debug)]
-pub struct PsbValueReader<T> {
+pub struct PsbStreamValueReader<T> {
     stream: T,
     buf: Vec<u64>,
 }
 
-impl<T: AsyncRead + Unpin> PsbValueReader<T> {
+impl<T: AsyncRead + Unpin> PsbStreamValueReader<T> {
     pub const fn new(stream: T) -> Self {
         Self {
             stream,
@@ -53,11 +55,12 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
 
         match value_type {
             value_type @ PSB_TYPE_INTEGER_ARRAY_START..=PSB_TYPE_INTEGER_ARRAY_MAX => {
-                let len = self
-                    .stream
-                    .read_partial_uint(value_type - PSB_TYPE_INTEGER_ARRAY_N)
-                    .await?;
-                let item_byte_size = self.stream.read_u8().await? - PSB_TYPE_INTEGER_ARRAY_N;
+                let len =
+                    read_partial_uint(&mut self.stream, value_type - PSB_TYPE_INTEGER_ARRAY_N)
+                        .await?;
+                let item_byte_size =
+                    NonZeroU8::new(self.stream.read_u8().await? - PSB_TYPE_INTEGER_ARRAY_N)
+                        .ok_or(PsbValueReadError::InvalidValue)?;
 
                 Ok(PsbStreamValue::UintArray {
                     len,
@@ -75,7 +78,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
     /// Read stream of u64 values
     pub fn next_uint_array(
         &mut self,
-        item_byte_size: u8,
+        item_byte_size: NonZeroU8,
         len: u64,
     ) -> impl Stream<Item = io::Result<u64>> {
         read_uint_array(&mut self.stream, item_byte_size, len)
@@ -161,16 +164,13 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
 
             value_type @ PSB_TYPE_INTEGER_START..=PSB_TYPE_INTEGER_MAX => {
                 Ok(Some(PsbPrimitive::Number(PsbNumber::Integer(
-                    self.stream
-                        .read_partial_int(value_type - PSB_TYPE_INTEGER_N)
-                        .await?,
+                    read_partial_int(&mut self.stream, value_type - PSB_TYPE_INTEGER_N).await?,
                 ))))
             }
 
             value_type @ PSB_TYPE_RESOURCE_START..=PSB_TYPE_RESOURCE_MAX => {
                 Ok(Some(PsbPrimitive::Resource(
-                    self.stream
-                        .read_partial_uint(value_type - PSB_TYPE_RESOURCE_N)
+                    read_partial_uint(&mut self.stream, value_type - PSB_TYPE_RESOURCE_N)
                         .await?
                         .try_into()
                         .map_err(|_| PsbValueReadError::InvalidValue)?,
@@ -179,8 +179,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
 
             value_type @ PSB_TYPE_STRING_START..=PSB_TYPE_STRING_MAX => {
                 Ok(Some(PsbPrimitive::String(
-                    self.stream
-                        .read_partial_uint(value_type - PSB_TYPE_STRING_N)
+                    read_partial_uint(&mut self.stream, value_type - PSB_TYPE_STRING_N)
                         .await?
                         .try_into()
                         .map_err(|_| PsbValueReadError::InvalidValue)?,
@@ -189,8 +188,7 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
 
             value_type @ PSB_TYPE_EXTRA_START..=PSB_TYPE_EXTRA_MAX => {
                 Ok(Some(PsbPrimitive::ExtraResource(
-                    self.stream
-                        .read_partial_uint(value_type - PSB_TYPE_EXTRA_N)
+                    read_partial_uint(&mut self.stream, value_type - PSB_TYPE_EXTRA_N)
                         .await?
                         .try_into()
                         .map_err(|_| PsbValueReadError::InvalidValue)?,
@@ -212,12 +210,12 @@ impl<T: AsyncRead + Unpin> PsbValueReader<T> {
 
 #[derive(Debug)]
 struct PsbBufReader<'a, T> {
-    inner: &'a mut PsbValueReader<T>,
+    inner: &'a mut PsbStreamValueReader<T>,
     buf_start: usize,
 }
 
 impl<'a, T> PsbBufReader<'a, T> {
-    const fn new(inner: &'a mut PsbValueReader<T>, buf_start: usize) -> Self {
+    const fn new(inner: &'a mut PsbStreamValueReader<T>, buf_start: usize) -> Self {
         Self { inner, buf_start }
     }
 }
@@ -239,7 +237,7 @@ impl<'a, T> PsbListAccess<'a, T>
 where
     T: AsyncRead + AsyncSeek + Unpin,
 {
-    pub async fn next(&mut self) -> io::Result<Option<&mut PsbValueReader<T>>> {
+    pub async fn next(&mut self) -> io::Result<Option<&mut PsbStreamValueReader<T>>> {
         let Some(offset) = self.offsets.next() else {
             return Ok(None);
         };
@@ -267,7 +265,9 @@ impl<'a, T> PsbObjectAccess<'a, T>
 where
     T: AsyncRead + AsyncSeek + Unpin,
 {
-    pub async fn next(&mut self) -> io::Result<Option<(PsbNameIndex, &mut PsbValueReader<T>)>> {
+    pub async fn next(
+        &mut self,
+    ) -> io::Result<Option<(PsbNameIndex, &mut PsbStreamValueReader<T>)>> {
         let Some(name) = self.names.next() else {
             return Ok(None);
         };
@@ -289,10 +289,11 @@ where
 
 fn read_uint_array(
     stream: &mut (impl AsyncRead + Unpin),
-    item_byte_size: u8,
+    item_byte_size: NonZeroU8,
     len: u64,
 ) -> impl Stream<Item = io::Result<u64>> {
+    let item_byte_size = item_byte_size.get();
     try_stream!(for _ in 0..len {
-        yield stream.read_partial_uint(item_byte_size).await?;
+        yield read_partial_uint(stream, item_byte_size).await?;
     })
 }

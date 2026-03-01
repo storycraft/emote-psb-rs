@@ -13,3 +13,12 @@ pub enum PsbValueReadError {
     #[error(transparent)]
     Io(#[from] io::Error),
 }
+
+#[derive(Debug, Error)]
+pub enum PsbValueWriteError {
+    #[error("invalid writer input")]
+    InvalidInput,
+
+    #[error(transparent)]
+    Io(#[from] io::Error),
+}

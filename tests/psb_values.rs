@@ -117,7 +117,7 @@ mod tests {
     // }
 
     use core::error::Error;
-    use emote_psb::{psb::PsbFile, value::io::read::PsbValueReader};
+    use emote_psb::{psb::PsbFile, value::io::read::PsbStreamValueReader};
     use mimalloc::MiMalloc;
     use std::io::SeekFrom;
     use tokio::{
@@ -135,7 +135,7 @@ mod tests {
                 dbg!(&psb);
 
                 file.seek(SeekFrom::Start(psb.entrypoint as _)).await?;
-                let mut reader = PsbValueReader::new(&mut file);
+                let mut reader = PsbStreamValueReader::new(&mut file);
 
                 reader.next().await?;
 

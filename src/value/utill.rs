@@ -1,6 +1,6 @@
 use std::io;
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug)]
 pub struct SparseVec<T> {
@@ -37,26 +37,42 @@ impl<T: Default + Clone> SparseVec<T> {
     }
 }
 
-#[extend::ext(name = PsbValueReadExt)]
-pub impl<T: AsyncRead + Unpin> T {
-    async fn read_partial_uint(&mut self, size: u8) -> io::Result<u64> {
-        match size {
-            0 => Ok(0),
-            1..=8 => {
-                let mut buf = [0_u8; 8];
-                self.read_exact(&mut buf[..size as usize]).await?;
+pub async fn read_partial_uint(stream: &mut (impl AsyncRead + Unpin), size: u8) -> io::Result<u64> {
+    match size {
+        0 => Ok(0),
+        1..=8 => {
+            let mut buf = [0_u8; 8];
+            stream.read_exact(&mut buf[..size as usize]).await?;
 
-                Ok(u64::from_le_bytes(buf))
-            }
-
-            _ => Err(io::Error::from(io::ErrorKind::InvalidInput)),
+            Ok(u64::from_le_bytes(buf))
         }
-    }
 
-    async fn read_partial_int(&mut self, size: u8) -> io::Result<i64> {
-        Ok(i64::from_ne_bytes(
-            self.read_partial_uint(size).await?.to_ne_bytes(),
-        ))
+        _ => Err(io::Error::from(io::ErrorKind::InvalidInput)),
+    }
+}
+
+pub async fn read_partial_int(stream: &mut (impl AsyncRead + Unpin), size: u8) -> io::Result<i64> {
+    Ok(i64::from_ne_bytes(
+        read_partial_uint(stream, size).await?.to_ne_bytes(),
+    ))
+}
+
+#[extend::ext(name = PsbValueWriteExt)]
+pub impl<T: AsyncWrite + Unpin> T {}
+
+pub async fn write_partial_uint(
+    stream: &mut (impl AsyncWrite + Unpin),
+    v: u64,
+    size: u8,
+) -> io::Result<()> {
+    match size {
+        0 => Ok(()),
+        1..=8 => {
+            stream.write_all(&v.to_le_bytes()[..size as usize]).await?;
+            Ok(())
+        }
+
+        _ => Err(io::Error::from(io::ErrorKind::InvalidInput)),
     }
 }
 

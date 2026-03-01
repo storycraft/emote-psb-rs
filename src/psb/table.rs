@@ -2,9 +2,9 @@ use std::io::SeekFrom;
 
 use tokio::io::{AsyncRead, AsyncSeek, AsyncSeekExt};
 
-use crate::value::{
-    collection::PsbUintArray,
-    io::{error::PsbValueReadError, read::PsbValueReader},
+use crate::value::io::{
+    error::PsbValueReadError,
+    read::{PsbStreamValueReader, ext::PsbValueReaderExt},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
@@ -24,8 +24,10 @@ impl PsbStringTable {
         data_pos: u32,
     ) -> Result<Self, PsbValueReadError> {
         stream.seek(SeekFrom::Start(offset_pos as _)).await?;
-        let mut reader = PsbValueReader::new(stream);
-        let PsbUintArray(offsets) = PsbUintArray::read(&mut reader).await?;
+        let mut offsets = vec![];
+        PsbStreamValueReader::new(stream)
+            .read_uint_array(&mut offsets)
+            .await?;
 
         Ok(Self {
             items: offsets
@@ -51,17 +53,22 @@ pub struct PsbResourceTable {
 
 impl PsbResourceTable {
     pub(crate) async fn read_io(
-        stream: &mut (impl AsyncRead + AsyncSeek + Unpin),
+        reader: &mut (impl AsyncRead + AsyncSeek + Unpin),
         offset_pos: u32,
         lengths_pos: u32,
         data_pos: u32,
     ) -> Result<Self, PsbValueReadError> {
-        stream.seek(SeekFrom::Start(offset_pos as _)).await?;
-        let PsbUintArray(offsets) =
-            PsbUintArray::read(&mut PsbValueReader::new(&mut *stream)).await?;
+        reader.seek(SeekFrom::Start(offset_pos as _)).await?;
+        let mut offsets = vec![];
+        PsbStreamValueReader::new(&mut *reader)
+            .read_uint_array(&mut offsets)
+            .await?;
 
-        stream.seek(SeekFrom::Start(lengths_pos as _)).await?;
-        let PsbUintArray(lengths) = PsbUintArray::read(&mut PsbValueReader::new(stream)).await?;
+        reader.seek(SeekFrom::Start(lengths_pos as _)).await?;
+        let mut lengths = vec![];
+        PsbStreamValueReader::new(&mut *reader)
+            .read_uint_array(&mut lengths)
+            .await?;
 
         Ok(Self {
             items: offsets
