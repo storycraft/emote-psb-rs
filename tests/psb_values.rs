@@ -1,8 +1,5 @@
 #[cfg(test)]
 mod tests {
-    #[global_allocator]
-    static GLOBAL: MiMalloc = MiMalloc;
-
     // use std::{collections::HashMap, fs::File};
 
     // use emote_psb::{
@@ -115,37 +112,4 @@ mod tests {
     //         .finish()
     //         .unwrap();
     // }
-
-    use core::error::Error;
-    use emote_psb::{psb::PsbFile, value::io::read::PsbStreamValueReader};
-    use mimalloc::MiMalloc;
-    use std::io::SeekFrom;
-    use tokio::{
-        fs::File,
-        io::{AsyncSeekExt, BufReader},
-    };
-
-    #[test]
-    fn read_test() -> Result<(), Box<dyn Error>> {
-        tokio::runtime::Builder::new_current_thread()
-            .build()?
-            .block_on(async {
-                let mut file = BufReader::new(File::open("01_com_001_01.ks.scn").await?);
-                let psb = PsbFile::open(&mut file).await?;
-                dbg!(&psb);
-
-                file.seek(SeekFrom::Start(psb.entrypoint as _)).await?;
-                let mut reader = PsbStreamValueReader::new(&mut file);
-
-                reader.next().await?;
-
-                let mut obj = reader.next_object().await?;
-                while let Some((name, reader)) = obj.next().await? {
-                    let v = reader.next().await?;
-                    dbg!((name, v));
-                }
-
-                Ok(())
-            })
-    }
 }

@@ -1,6 +1,5 @@
 pub mod error;
 pub mod table;
-mod types;
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek};
 
@@ -112,65 +111,4 @@ impl PsbFile {
             extra,
         })
     }
-
-    // pub fn load_root(&mut self) -> Result<PsbObject, PsbError> {
-    //     self.stream
-    //         .seek(SeekFrom::Start(self.entrypoint() as u64))?;
-    //     let (_, root) = PsbValue::from_bytes_refs(&mut self.stream, &self.refs)?;
-
-    //     if let PsbValue::Object(root_obj) = root {
-    //         Ok(root_obj)
-    //     } else {
-    //         Err(PsbError::new(PsbErrorKind::InvalidPSBRoot, None))
-    //     }
-    // }
-
-    // fn load_from_table<R: Read + Seek>(
-    //     stream: &mut R,
-    //     table: PsbResourcesOffset,
-    // ) -> Result<Vec<Vec<u8>>, PsbError> {
-    //     stream.seek(SeekFrom::Start(table.offset_pos as u64))?;
-    //     let (_, resource_offsets) = match PsbValue::from_bytes(stream)? {
-    //         (read, PsbValue::IntArray(array)) => Ok((read, array)),
-
-    //         _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
-    //     }?;
-
-    //     stream.seek(SeekFrom::Start(table.lengths_pos as u64))?;
-    //     let (_, resource_lengths) = match PsbValue::from_bytes(stream)? {
-    //         (read, PsbValue::IntArray(array)) => Ok((read, array)),
-
-    //         _ => Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None)),
-    //     }?;
-
-    //     if resource_offsets.len() < resource_lengths.len() {
-    //         return Err(PsbError::new(PsbErrorKind::InvalidOffsetTable, None));
-    //     }
-
-    //     let mut resources = Vec::new();
-
-    //     let resource_offsets = resource_offsets.unwrap();
-    //     let resource_lengths = resource_lengths.unwrap();
-
-    //     for i in 0..resource_offsets.len() {
-    //         let mut buffer = Vec::new();
-
-    //         stream.seek(SeekFrom::Start(table.data_pos as u64 + resource_offsets[i]))?;
-    //         stream.take(resource_lengths[i]).read_to_end(&mut buffer)?;
-
-    //         resources.push(buffer);
-    //     }
-
-    //     Ok(resources)
-    // }
-
-    // /// Load Psb file to memory.
-    // /// Returns VirtualPsb.
-    // pub fn load(&mut self) -> Result<VirtualPsb, PsbError> {
-    //     let root = self.load_root()?;
-    //     let res = self.load_resources()?;
-    //     let extra = self.load_extra()?;
-
-    //     Ok(VirtualPsb::new(self.header, res, extra, root))
-    // }
 }
