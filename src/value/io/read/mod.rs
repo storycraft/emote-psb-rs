@@ -19,7 +19,7 @@ use crate::value::{
         error::PsbValueReadError,
     },
     number::PsbNumber,
-    utill::{read_partial_int, read_partial_uint},
+    util::{read_partial_int, read_partial_uint},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -4,7 +4,7 @@ use tokio::io::AsyncWrite;
 
 use crate::value::{
     io::{error::PsbValueWriteError, write::PsbStreamValueWriter},
-    utill::get_uint_n,
+    util::get_uint_n,
 };
 
 #[extend::ext(name = PsbValueWriterExt)]

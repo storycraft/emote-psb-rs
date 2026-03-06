@@ -8,7 +8,7 @@ use crate::value::{
         read::{PsbStreamValueReader, ext::PsbValueReaderExt},
         write::{PsbStreamValueWriter, ext::PsbValueWriterExt},
     },
-    utill::SparseVec,
+    util::SparseVec,
 };
 
 /// Binary tree

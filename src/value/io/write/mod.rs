@@ -16,7 +16,7 @@ use crate::value::{
         error::PsbValueWriteError,
     },
     number::PsbNumber,
-    utill::{get_n, get_uint_n, write_partial_uint},
+    util::{get_n, get_uint_n, write_partial_uint},
 };
 
 #[derive(Debug)]

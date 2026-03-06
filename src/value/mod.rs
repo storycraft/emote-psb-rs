@@ -1,7 +1,7 @@
 pub mod binary_tree;
 pub mod io;
 pub mod number;
-mod utill;
+mod util;
 
 use number::PsbNumber;
 
