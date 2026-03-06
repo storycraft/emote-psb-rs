@@ -7,7 +7,6 @@ use core::{
 use std::io::{self, SeekFrom};
 
 use async_compression::tokio::{bufread::ZlibDecoder, write::ZlibEncoder};
-use pin_project::pin_project;
 use tokio::io::{
     AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, AsyncWrite, AsyncWriteExt, BufReader,
     ReadBuf, Take,
@@ -18,9 +17,7 @@ use crate::{
     mdf::error::{MdfCreateError, MdfOpenError},
 };
 
-#[pin_project]
 pub struct MdfReader<T> {
-    #[pin]
     inner: ZlibDecoder<BufReader<Take<T>>>,
     size: u32,
 }
@@ -53,13 +50,11 @@ impl<T: AsyncRead + Unpin> AsyncRead for MdfReader<T> {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        self.project().inner.poll_read(cx, buf)
+        Pin::new(&mut self.get_mut().inner).poll_read(cx, buf)
     }
 }
 
-#[pin_project]
 pub struct MdfWriter<T> {
-    #[pin]
     inner: ZlibEncoder<T>,
     stream_start: u64,
 }
