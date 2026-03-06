@@ -73,15 +73,16 @@ impl<T: AsyncWrite + AsyncSeek + Unpin> MdfWriter<T> {
     }
 
     /// Finish mdf file
-    pub async fn finish(self) -> io::Result<T> {
+    pub async fn finish(mut self) -> io::Result<T> {
+        self.inner.shutdown().await?;
         let mut stream = self.inner.into_inner();
+
         let end = stream.stream_position().await?;
         stream.seek(SeekFrom::Start(self.stream_start - 4)).await?;
         stream
             .write_u32_le((end - self.stream_start) as u32)
             .await?;
         stream.seek(SeekFrom::Start(end)).await?;
-
         Ok(stream)
     }
 }
