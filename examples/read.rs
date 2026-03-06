@@ -13,22 +13,19 @@ use tokio::{
     io::{AsyncRead, AsyncSeek, AsyncSeekExt, BufReader},
 };
 
-fn main() -> Result<(), Box<dyn Error>> {
-    tokio::runtime::Builder::new_current_thread()
-        .build()?
-        .block_on(async {
-            let mut file = BufReader::new(File::open("01_com_001_01.ks.scn").await?);
-            let psb = PsbFile::open(&mut file).await?;
-            dbg!(&psb);
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let mut file = BufReader::new(File::open("01_com_001_01.ks.scn").await?);
+    let psb = PsbFile::open(&mut file).await?;
+    dbg!(&psb);
 
-            file.seek(SeekFrom::Start(psb.entrypoint as _)).await?;
-            let mut reader = PsbStreamValueReader::new(&mut file);
-            let start = Instant::now();
-            read_value(&mut reader, &mut vec![]).await?;
-            println!("Elapsed: {} ms", start.elapsed().as_millis());
+    file.seek(SeekFrom::Start(psb.entrypoint as _)).await?;
+    let mut reader = PsbStreamValueReader::new(&mut file);
+    let start = Instant::now();
+    read_value(&mut reader, &mut vec![]).await?;
+    println!("Elapsed: {} ms", start.elapsed().as_millis());
 
-            Ok(())
-        })
+    Ok(())
 }
 
 async fn read_value(
