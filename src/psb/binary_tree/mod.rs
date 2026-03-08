@@ -1,45 +1,47 @@
-use std::collections::{HashMap, hash_map};
+mod util;
 
-use tokio::io::{AsyncRead, AsyncSeek, AsyncSeekExt, AsyncWrite};
+use std::{
+    collections::{HashMap, hash_map},
+    io::{Read, Seek, Write},
+};
 
-use crate::value::{
-    io::{
+use scopeguard::guard;
+
+use crate::{
+    psb::{binary_tree::util::SparseVec, string::StringTable, util::read_uint_array},
+    value::io::{
         error::{PsbValueReadError, PsbValueWriteError},
-        read::{PsbStreamValueReader, ext::PsbValueReaderExt},
-        write::{PsbStreamValueWriter, ext::PsbValueWriterExt},
+        read::PsbStreamValueReader,
+        write::PsbStreamValueWriter,
     },
-    util::SparseVec,
 };
 
 /// Binary tree
-#[derive(Debug, Clone, Default, derive_more::From)]
-pub(crate) struct PsbBinaryTree {
-    #[from]
-    pub list: Vec<Vec<u8>>,
-}
+pub struct PsbBinaryTree(pub StringTable);
 
 impl PsbBinaryTree {
-    pub async fn read_io(
-        stream: &mut (impl AsyncRead + AsyncSeek + Unpin),
-        name_offset: u32,
+    pub fn read_io(
+        stream: &mut (impl Read + Seek),
+        buf: &mut Vec<u64>,
     ) -> Result<Self, PsbValueReadError> {
-        stream
-            .seek(std::io::SeekFrom::Start(name_offset as _))
-            .await?;
         let mut reader = PsbStreamValueReader::new(stream);
 
-        let mut offsets = vec![];
-        let mut tree = vec![];
-        let mut indexes = vec![];
-        reader.read_uint_array(&mut offsets).await?;
-        reader.read_uint_array(&mut tree).await?;
-        reader.read_uint_array(&mut indexes).await?;
+        let offsets_start = buf.len();
+        let mut buf = guard(buf, |buf| {
+            buf.drain(offsets_start..);
+        });
+        read_uint_array(&mut reader, *buf)?;
+        let tree_start = buf.len();
+        read_uint_array(&mut reader, *buf)?;
+        let indexes_start = buf.len();
+        read_uint_array(&mut reader, *buf)?;
 
-        let mut list = Vec::<Vec<u8>>::with_capacity(indexes.len());
-
-        for index in indexes {
-            let mut buffer = Vec::<u8>::with_capacity(4);
-
+        let offsets = &buf[offsets_start..tree_start];
+        let tree = &buf[tree_start..indexes_start];
+        let indexes = &buf[indexes_start..];
+        let mut table = StringTable::with_capacity(buf.len() - indexes_start);
+        let mut name = vec![];
+        for &index in indexes {
             let mut id = tree[index as usize];
 
             while id != 0 {
@@ -51,19 +53,19 @@ impl PsbBinaryTree {
 
                 id = next;
 
-                buffer.push(decoded as u8);
+                name.push(decoded as u8);
             }
-
-            buffer.reverse();
-            list.push(buffer);
+            name.reverse();
+            table.push(str::from_utf8(&name).map_err(|_| PsbValueReadError::InvalidValue)?);
+            name.clear();
         }
 
-        Ok(Self::from(list))
+        Ok(Self(table))
     }
 
     pub async fn write_tree(
         &self,
-        writer: &mut PsbStreamValueWriter<impl AsyncWrite + Unpin>,
+        writer: &mut PsbStreamValueWriter<impl Write>,
     ) -> Result<(), PsbValueWriteError> {
         let mut root = self.build_tree();
 
@@ -74,22 +76,21 @@ impl PsbBinaryTree {
         offsets.push(1);
         self.make_sub_tree(&mut root, Vec::new(), &mut offsets, &mut tree, &mut indexes);
 
-        writer.write_uint_array(&offsets.into_inner()).await?;
-        writer.write_uint_array(&tree.into_inner()).await?;
-        writer.write_uint_array(&indexes.into_inner()).await?;
+        writer.write_uint_array(&offsets.into_inner())?;
+        writer.write_uint_array(&tree.into_inner())?;
+        writer.write_uint_array(&indexes.into_inner())?;
         Ok(())
     }
 
     fn build_tree(&self) -> TreeNode {
         let mut root = TreeNode::new();
 
-        for data in &self.list {
+        for data in self.0.iter() {
             let mut last_node = &mut root;
 
-            for byte in data {
+            for byte in data.as_bytes() {
                 last_node = last_node.get_or_insert_mut(*byte);
             }
-
             last_node.get_or_insert(0);
         }
 
@@ -142,7 +143,11 @@ impl PsbBinaryTree {
             tree.set(end, 0);
 
             if *child_value == 0 {
-                let index = self.list.iter().position(|val| val.eq(&value)).unwrap() as u64;
+                let index = self
+                    .0
+                    .iter()
+                    .position(|val| val.as_bytes().eq(&value))
+                    .unwrap() as u64;
                 offsets.set(child.id as usize, index);
                 indexes.set(index as usize, child.id);
             } else {

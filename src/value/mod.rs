@@ -1,13 +1,11 @@
-pub mod binary_tree;
 pub mod io;
 pub mod number;
 mod util;
 
 use number::PsbNumber;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(untagged))]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
 pub enum PsbPrimitive {
     None,
     Null,

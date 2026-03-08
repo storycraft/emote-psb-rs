@@ -1,48 +1,11 @@
-use std::io;
+use std::io::{self, Read, Write};
 
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
-#[derive(Debug)]
-pub struct SparseVec<T> {
-    vec: Vec<T>,
-}
-
-impl<T: Default + Clone> SparseVec<T> {
-    pub fn new() -> Self {
-        Self { vec: Vec::new() }
-    }
-
-    pub fn len(&self) -> usize {
-        self.vec.len()
-    }
-
-    pub fn set(&mut self, index: usize, value: T) {
-        if self.vec.len() <= index {
-            self.vec.resize_with(index + 1, T::default);
-        }
-
-        self.vec[index] = value;
-    }
-
-    pub fn push(&mut self, value: T) {
-        self.vec.push(value);
-    }
-
-    pub fn get(&self, index: usize) -> Option<&T> {
-        self.vec.get(index)
-    }
-
-    pub fn into_inner(self) -> Vec<T> {
-        self.vec
-    }
-}
-
-pub async fn read_partial_uint(stream: &mut (impl AsyncRead + Unpin), size: u8) -> io::Result<u64> {
+pub fn read_partial_uint(stream: &mut impl Read, size: u8) -> io::Result<u64> {
     match size {
         0 => Ok(0),
         1..=8 => {
             let mut buf = [0_u8; 8];
-            stream.read_exact(&mut buf[..size as usize]).await?;
+            stream.read_exact(&mut buf[..size as usize])?;
 
             Ok(u64::from_le_bytes(buf))
         }
@@ -51,24 +14,17 @@ pub async fn read_partial_uint(stream: &mut (impl AsyncRead + Unpin), size: u8) 
     }
 }
 
-pub async fn read_partial_int(stream: &mut (impl AsyncRead + Unpin), size: u8) -> io::Result<i64> {
+pub fn read_partial_int(stream: &mut impl Read, size: u8) -> io::Result<i64> {
     Ok(i64::from_ne_bytes(
-        read_partial_uint(stream, size).await?.to_ne_bytes(),
+        read_partial_uint(stream, size)?.to_ne_bytes(),
     ))
 }
 
-#[extend::ext(name = PsbValueWriteExt)]
-pub impl<T: AsyncWrite + Unpin> T {}
-
-pub async fn write_partial_uint(
-    stream: &mut (impl AsyncWrite + Unpin),
-    v: u64,
-    size: u8,
-) -> io::Result<()> {
+pub fn write_partial_uint(stream: &mut impl Write, v: u64, size: u8) -> io::Result<()> {
     match size {
         0 => Ok(()),
         1..=8 => {
-            stream.write_all(&v.to_le_bytes()[..size as usize]).await?;
+            stream.write_all(&v.to_le_bytes()[..size as usize])?;
             Ok(())
         }
 
