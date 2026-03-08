@@ -9,7 +9,7 @@ pub fn read_uint_array(
     reader: &mut PsbStreamValueReader<impl Read>,
     array: &mut impl Extend<u64>,
 ) -> Result<(), PsbValueReadError> {
-    let PsbStreamValue::UintArray(len) = reader.next()? else {
+    let PsbStreamValue::UintArray(len) = reader.read_next()? else {
         return Err(PsbValueReadError::InvalidValue);
     };
 

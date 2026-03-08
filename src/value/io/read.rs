@@ -38,7 +38,7 @@ impl<T: Read> PsbStreamValueReader<T> {
         }
     }
 
-    pub fn next(&mut self) -> Result<PsbStreamValue, PsbValueReadError> {
+    pub fn read_next(&mut self) -> Result<PsbStreamValue, PsbValueReadError> {
         const PSB_TYPE_INTEGER_ARRAY_START: u8 = PSB_TYPE_INTEGER_ARRAY_N + 1;
         const PSB_TYPE_INTEGER_ARRAY_MAX: u8 = PSB_TYPE_INTEGER_ARRAY_N + 8;
 
