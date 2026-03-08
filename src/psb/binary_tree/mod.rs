@@ -8,7 +8,7 @@ use std::{
 use scopeguard::guard;
 
 use crate::{
-    psb::{binary_tree::util::SparseVec, string::StringTable, util::read_uint_array},
+    psb::{binary_tree::util::SparseVec, table::StringTable, util::read_uint_array},
     value::io::{
         error::{PsbValueReadError, PsbValueWriteError},
         read::PsbStreamValueReader,

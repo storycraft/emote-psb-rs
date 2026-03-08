@@ -6,6 +6,12 @@ pub struct StringTable {
     indices: Vec<usize>,
 }
 
+impl Default for StringTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StringTable {
     pub const fn new() -> Self {
         Self {
@@ -37,6 +43,11 @@ impl StringTable {
         } else {
             &self.data[start..]
         })
+    }
+
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 
     #[inline]

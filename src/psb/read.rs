@@ -1,4 +1,4 @@
-use std::io::{BufRead, Read, Seek, SeekFrom};
+use std::io::{BufRead, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use scopeguard::guard;
@@ -6,30 +6,31 @@ use scopeguard::guard;
 use crate::{
     PSB_SIGNATURE,
     psb::{
-        binary_tree::PsbBinaryTree, error::PsbOpenError, string::StringTable, util::read_uint_array,
+        binary_tree::PsbBinaryTree, error::PsbOpenError, table::StringTable, util::read_uint_array,
     },
     value::io::{error::PsbValueReadError, read::PsbStreamValueReader},
 };
 
 #[derive(Debug, Clone)]
-pub struct PsbFile {
+pub struct PsbFile<T> {
     pub encrypted: bool,
     pub version: u16,
 
-    names: StringTable,
-    strings: StringTable,
+    pub names: StringTable,
+    pub strings: StringTable,
     resources: Vec<PsbResourceItem>,
 
     /// Offset to root object
     entrypoint: u32,
 
-    checksum: Option<u32>,
-    extra: Option<Vec<PsbResourceItem>>,
+    pub checksum: Option<u32>,
+    extra: Vec<PsbResourceItem>,
+    stream: T,
 }
 
-impl PsbFile {
+impl<T: BufRead + Seek> PsbFile<T> {
     /// Open Psb file from stream
-    pub fn open<T: BufRead + Seek>(mut stream: T) -> Result<Self, PsbOpenError> {
+    pub fn open(mut stream: T) -> Result<Self, PsbOpenError> {
         let start = stream.stream_position()?;
         let signature = stream.read_u32::<LittleEndian>()?;
         if signature != PSB_SIGNATURE {
@@ -68,17 +69,15 @@ impl PsbFile {
             stream.seek(std::io::SeekFrom::Start(
                 start + extra_resource_offset as u64,
             ))?;
-            Some(
-                Self::read_resources(
-                    &mut stream,
-                    &mut buf,
-                    start + extra_resource_lengths as u64,
-                    start + extra_resource_data_start as u64,
-                )
-                .map_err(PsbOpenError::Resources)?,
+            Self::read_resources(
+                &mut stream,
+                &mut buf,
+                start + extra_resource_lengths as u64,
+                start + extra_resource_data_start as u64,
             )
+            .map_err(PsbOpenError::Resources)?
         } else {
-            None
+            vec![]
         };
 
         stream.seek(std::io::SeekFrom::Start(start + name_offset as u64))?;
@@ -108,11 +107,12 @@ impl PsbFile {
             entrypoint,
             checksum,
             extra,
+            stream,
         })
     }
 
     fn read_strings(
-        mut stream: &mut (impl BufRead + Seek),
+        mut stream: &mut T,
         buf: &mut Vec<u64>,
         data_pos: u64,
     ) -> Result<StringTable, PsbValueReadError> {
@@ -133,7 +133,7 @@ impl PsbFile {
     }
 
     fn read_resources(
-        mut stream: &mut (impl Read + Seek),
+        mut stream: &mut T,
         buf: &mut Vec<u64>,
         lengths_pos: u64,
         data_pos: u64,
@@ -160,27 +160,23 @@ impl PsbFile {
     }
 
     #[inline]
-    pub const fn names(&self) -> usize {
-        self.names.len()
-    }
-
-    pub fn get_name(&self, id: usize) -> Option<&str> {
-        self.names.get(id)
+    pub const fn resources(&self) -> usize {
+        self.resources.len()
     }
 
     #[inline]
-    pub const fn strings(&self) -> usize {
-        self.strings.len()
+    pub const fn extra_resources(&self) -> usize {
+        self.extra.len()
     }
 
     #[inline]
-    pub fn get_string(&self, id: usize) -> Option<&str> {
-        self.strings.get(id)
+    pub fn into_inner(self) -> T {
+        self.stream
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 struct PsbResourceItem {
-    pub position: u64,
-    pub size: u64,
+    position: u64,
+    size: u64,
 }
