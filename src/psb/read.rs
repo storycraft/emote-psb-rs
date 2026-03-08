@@ -124,6 +124,7 @@ impl PsbFile {
         for offset in buf.drain(offset_start..) {
             stream.seek(SeekFrom::Start(data_pos + offset))?;
             stream.read_until(0x00, &mut string_buf)?;
+            string_buf.pop();
             table.push(str::from_utf8(&string_buf).map_err(|_| PsbValueReadError::InvalidValue)?);
             string_buf.clear();
         }
