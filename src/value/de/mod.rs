@@ -1,6 +1,7 @@
 mod error;
 mod map;
 mod seq;
+mod special;
 
 pub use error::Error;
 
@@ -26,6 +27,7 @@ use crate::{
         de::{
             map::PsbObject,
             seq::{List, UIntArray},
+            special::SpecialTypeDeserializer,
         },
         util::{read_partial_int, read_partial_uint, read_uint_array},
     },
@@ -45,14 +47,6 @@ impl<'a, T: BufRead + Seek> Deserializer<'a, T> {
             strings,
             buf: vec![],
             stream,
-        }
-    }
-
-    fn expect(&mut self, ty: u8) -> Result<(), Error> {
-        if ty == self.stream.read_u8()? {
-            Ok(())
-        } else {
-            Err(Error::InvalidValueType(ty))
         }
     }
 
@@ -91,15 +85,6 @@ impl<'a, T: BufRead + Seek> Deserializer<'a, T> {
             .map_err(|_| Error::InvalidValue)?;
         visitor.visit_newtype_struct(idx.into_deserializer())
     }
-
-    fn deserialize_compiler_unit<V: Visitor<'static>>(
-        &mut self,
-        ty: u8,
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        self.expect(ty)?;
-        visitor.visit_newtype_struct(().into_deserializer())
-    }
 }
 
 impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T> {
@@ -111,8 +96,12 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
     {
         const PSB_TYPE_INTEGER_START: u8 = PSB_TYPE_INTEGER_N;
         const PSB_TYPE_INTEGER_MAX: u8 = PSB_TYPE_INTEGER_N + 8;
+        const PSB_TYPE_RESOURCE_START: u8 = PSB_TYPE_RESOURCE_N + 1;
+        const PSB_TYPE_RESOURCE_MAX: u8 = PSB_TYPE_RESOURCE_N + 4;
         const PSB_TYPE_STRING_START: u8 = PSB_TYPE_STRING_N + 1;
         const PSB_TYPE_STRING_MAX: u8 = PSB_TYPE_STRING_N + 4;
+        const PSB_TYPE_EXTRA_START: u8 = PSB_TYPE_EXTRA_N + 1;
+        const PSB_TYPE_EXTRA_MAX: u8 = PSB_TYPE_EXTRA_N + 4;
         const PSB_TYPE_INTEGER_ARRAY_START: u8 = PSB_TYPE_INTEGER_ARRAY_N + 1;
         const PSB_TYPE_INTEGER_ARRAY_MAX: u8 = PSB_TYPE_INTEGER_ARRAY_N + 8;
 
@@ -137,6 +126,23 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
                     .map_err(|_| Error::InvalidValue)?;
 
                 visitor.visit_str(self.strings.get(idx as _).ok_or(Error::InvalidValue)?)
+            }
+
+            value_type @ PSB_TYPE_RESOURCE_START..=PSB_TYPE_RESOURCE_MAX => {
+                let idx: u32 =
+                    read_partial_uint(&mut self.stream, value_type - PSB_TYPE_RESOURCE_N)?
+                        .try_into()
+                        .map_err(|_| Error::InvalidValue)?;
+
+                SpecialTypeDeserializer::new(PsbResource::MARKER, idx).deserialize(visitor)
+            }
+
+            value_type @ PSB_TYPE_EXTRA_START..=PSB_TYPE_EXTRA_MAX => {
+                let idx: u32 = read_partial_uint(&mut self.stream, value_type - PSB_TYPE_EXTRA_N)?
+                    .try_into()
+                    .map_err(|_| Error::InvalidValue)?;
+
+                SpecialTypeDeserializer::new(PsbExtraResource::MARKER, idx).deserialize(visitor)
             }
 
             ty @ PSB_TYPE_INTEGER_ARRAY_START..=PSB_TYPE_INTEGER_ARRAY_MAX => {
@@ -164,6 +170,28 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
                 res
             }
 
+            PSB_COMPILER_INTEGER => {
+                SpecialTypeDeserializer::new(PsbCompilerNumber::MARKER, ()).deserialize(visitor)
+            }
+            PSB_COMPILER_STRING => {
+                SpecialTypeDeserializer::new(PsbCompilerString::MARKER, ()).deserialize(visitor)
+            }
+            PSB_COMPILER_RESOURCE => {
+                SpecialTypeDeserializer::new(PsbCompilerResource::MARKER, ()).deserialize(visitor)
+            }
+            PSB_COMPILER_ARRAY => {
+                SpecialTypeDeserializer::new(PsbCompilerArray::MARKER, ()).deserialize(visitor)
+            }
+            PSB_COMPILER_DECIMAL => {
+                SpecialTypeDeserializer::new(PsbCompilerDecimal::MARKER, ()).deserialize(visitor)
+            }
+            PSB_COMPILER_BOOL => {
+                SpecialTypeDeserializer::new(PsbCompilerBool::MARKER, ()).deserialize(visitor)
+            }
+            PSB_COMPILER_BINARY_TREE => {
+                SpecialTypeDeserializer::new(PsbCompilerBinaryTree::MARKER, ()).deserialize(visitor)
+            }
+
             ty => Err(Error::InvalidValueType(ty)),
         }
     }
@@ -183,31 +211,11 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
     where
         V: serde::de::Visitor<'static>,
     {
-        match name {
-            PsbStringIndex::MARKER => self.deserialize_ref(PSB_TYPE_STRING_N, 4, visitor),
-            PsbResource::MARKER => self.deserialize_ref(PSB_TYPE_RESOURCE_N, 4, visitor),
-            PsbExtraResource::MARKER => self.deserialize_ref(PSB_TYPE_EXTRA_N, 4, visitor),
-
-            PsbCompilerNumber::MARKER => {
-                self.deserialize_compiler_unit(PSB_COMPILER_INTEGER, visitor)
-            }
-            PsbCompilerString::MARKER => {
-                self.deserialize_compiler_unit(PSB_COMPILER_STRING, visitor)
-            }
-            PsbCompilerResource::MARKER => {
-                self.deserialize_compiler_unit(PSB_COMPILER_RESOURCE, visitor)
-            }
-            PsbCompilerDecimal::MARKER => {
-                self.deserialize_compiler_unit(PSB_COMPILER_DECIMAL, visitor)
-            }
-            PsbCompilerArray::MARKER => self.deserialize_compiler_unit(PSB_COMPILER_ARRAY, visitor),
-            PsbCompilerBool::MARKER => self.deserialize_compiler_unit(PSB_COMPILER_BOOL, visitor),
-            PsbCompilerBinaryTree::MARKER => {
-                self.deserialize_compiler_unit(PSB_COMPILER_BINARY_TREE, visitor)
-            }
-
-            _ => visitor.visit_newtype_struct(self),
+        if name == PsbStringIndex::MARKER {
+            return self.deserialize_ref(PSB_TYPE_STRING_N, 4, visitor);
         }
+
+        visitor.visit_newtype_struct(self)
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>

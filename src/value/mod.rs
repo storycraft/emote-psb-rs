@@ -68,9 +68,10 @@ pub enum PsbValue {
 
 macro_rules! define_special_type {
     ($vis:vis $name:ident $(: $val:ty)? = $marker:literal) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-        #[serde(rename = $marker)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         $vis struct $name $((pub $val))?;
+
+        #[allow(unused_parens)]
         const _: () = {
             impl $name {
                 pub(crate) const MARKER: &str = $marker;
@@ -83,6 +84,31 @@ macro_rules! define_special_type {
                     }
                 }
             )?
+
+            #[derive(serde::Serialize, serde::Deserialize)]
+            #[serde(rename = $marker)]
+            struct __Inner {
+                #[serde(rename = $marker)]
+                field: ($($val)?),
+            }
+
+            impl serde::Serialize for $name {
+                fn serialize<S>(&self, __serializer: S) -> Result<S::Ok, S::Error>
+                where
+                    S: serde::Serializer,
+                {
+                    __Inner { field: ($(self.0 as $val)?) }.serialize(__serializer)
+                }
+            }
+
+            impl<'de> serde::Deserialize<'de> for $name {
+                fn deserialize<D>(__deserializer: D) -> Result<Self, D::Error>
+                where
+                    D: serde::Deserializer<'de>,
+                {
+                    Ok(Self $((__Inner::deserialize(__deserializer)?.field as $val))? )
+                }
+            }
         };
     };
 }
