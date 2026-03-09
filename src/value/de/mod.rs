@@ -168,7 +168,7 @@ impl<'a, T: BufRead + Seek> serde::Deserializer<'static> for &'a mut Deserialize
         match name {
             SERDE_RESOURCE_MARKER => {
                 let n = self.expect_range(PSB_TYPE_RESOURCE_START..=PSB_TYPE_RESOURCE_MAX)?
-                    - PSB_TYPE_EXTRA_N;
+                    - PSB_TYPE_RESOURCE_N;
                 let idx: u32 = read_partial_uint(&mut self.stream, n)?
                     .try_into()
                     .map_err(|_| Error::InvalidValue)?;
