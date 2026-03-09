@@ -1,5 +1,28 @@
 use std::io::{self, Read, Write};
 
+use byteorder::ReadBytesExt;
+
+use crate::value::{PSB_TYPE_INTEGER_ARRAY_N, de};
+
+pub fn read_uint_array(stream: &mut impl Read, buf: &mut Vec<u64>) -> Result<usize, de::Error> {
+    const PSB_TYPE_INTEGER_ARRAY_START: u8 = PSB_TYPE_INTEGER_ARRAY_N + 1;
+    const PSB_TYPE_INTEGER_ARRAY_END: u8 = PSB_TYPE_INTEGER_ARRAY_N + 8;
+
+    let len_n = match stream.read_u8()? {
+        ty @ PSB_TYPE_INTEGER_ARRAY_START..=PSB_TYPE_INTEGER_ARRAY_END => {
+            ty - PSB_TYPE_INTEGER_ARRAY_N
+        }
+        ty => return Err(de::Error::InvalidValueType(ty)),
+    };
+
+    let len = read_partial_uint(stream, len_n)?;
+    let item_byte_size = stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N;
+    for _ in 0..len {
+        buf.push(read_partial_uint(stream, item_byte_size)?);
+    }
+    Ok(len as _)
+}
+
 pub fn read_partial_uint(stream: &mut impl Read, size: u8) -> io::Result<u64> {
     match size {
         0 => Ok(0),

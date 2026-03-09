@@ -1,9 +1,11 @@
+use core::fmt::Display;
 use std::io;
 
+use serde::de;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum PsbValueReadError {
+pub enum Error {
     #[error("invalid psb value type: {0}")]
     InvalidValueType(u8),
 
@@ -12,13 +14,13 @@ pub enum PsbValueReadError {
 
     #[error(transparent)]
     Io(#[from] io::Error),
+
+    #[error("{0}")]
+    Message(String),
 }
 
-#[derive(Debug, Error)]
-pub enum PsbValueWriteError {
-    #[error("invalid writer input")]
-    InvalidInput,
-
-    #[error(transparent)]
-    Io(#[from] io::Error),
+impl de::Error for Error {
+    fn custom<T: Display>(msg: T) -> Self {
+        Self::Message(msg.to_string())
+    }
 }

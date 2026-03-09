@@ -2,13 +2,15 @@ use std::io::{BufRead, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use scopeguard::guard;
+use serde::de::DeserializeOwned;
 
 use crate::{
     PSB_SIGNATURE,
-    psb::{
-        binary_tree::PsbBinaryTree, error::PsbOpenError, table::StringTable, util::read_uint_array,
+    psb::{binary_tree::PsbBinaryTree, error::PsbOpenError, table::StringTable},
+    value::{
+        de::{self, Deserializer},
+        util::read_uint_array,
     },
-    value::io::{error::PsbValueReadError, read::PsbStreamValueReader},
 };
 
 #[derive(Debug, Clone)]
@@ -21,7 +23,7 @@ pub struct PsbFile<T> {
     resources: Vec<PsbResourceItem>,
 
     /// Offset to root object
-    entrypoint: u32,
+    entrypoint: u64,
 
     pub checksum: Option<u32>,
     extra: Vec<PsbResourceItem>,
@@ -104,7 +106,7 @@ impl<T: BufRead + Seek> PsbFile<T> {
             names,
             strings,
             resources,
-            entrypoint,
+            entrypoint: start + entrypoint as u64,
             checksum,
             extra,
             stream,
@@ -112,12 +114,12 @@ impl<T: BufRead + Seek> PsbFile<T> {
     }
 
     fn read_strings(
-        mut stream: &mut T,
+        stream: &mut T,
         buf: &mut Vec<u64>,
         data_pos: u64,
-    ) -> Result<StringTable, PsbValueReadError> {
+    ) -> Result<StringTable, de::Error> {
         let offset_start = buf.len();
-        read_uint_array(&mut PsbStreamValueReader::new(&mut stream), buf)?;
+        read_uint_array(stream, buf)?;
 
         let mut table = StringTable::new();
         let mut string_buf = vec![];
@@ -125,7 +127,7 @@ impl<T: BufRead + Seek> PsbFile<T> {
             stream.seek(SeekFrom::Start(data_pos + offset))?;
             stream.read_until(0x00, &mut string_buf)?;
             string_buf.pop();
-            table.push(str::from_utf8(&string_buf).map_err(|_| PsbValueReadError::InvalidValue)?);
+            table.push(str::from_utf8(&string_buf).map_err(|_| de::Error::InvalidValue)?);
             string_buf.clear();
         }
 
@@ -133,22 +135,22 @@ impl<T: BufRead + Seek> PsbFile<T> {
     }
 
     fn read_resources(
-        mut stream: &mut T,
+        stream: &mut T,
         buf: &mut Vec<u64>,
         lengths_pos: u64,
         data_pos: u64,
-    ) -> Result<Vec<PsbResourceItem>, PsbValueReadError> {
+    ) -> Result<Vec<PsbResourceItem>, de::Error> {
         // offsets
         let offset_start = buf.len();
         let mut buf = guard(buf, |buf| {
             buf.drain(offset_start..);
         });
-        read_uint_array(&mut PsbStreamValueReader::new(&mut stream), *buf)?;
+        read_uint_array(stream, *buf)?;
 
         // lengths
         let length_start = buf.len();
         stream.seek(SeekFrom::Start(lengths_pos))?;
-        read_uint_array(&mut PsbStreamValueReader::new(&mut stream), *buf)?;
+        read_uint_array(stream, *buf)?;
 
         let mut list = vec![];
         for i in 0..length_start {
@@ -167,6 +169,12 @@ impl<T: BufRead + Seek> PsbFile<T> {
     #[inline]
     pub const fn extra_resources(&self) -> usize {
         self.extra.len()
+    }
+
+    pub fn deserialize_root<V: DeserializeOwned>(&mut self) -> Result<V, de::Error> {
+        self.stream.seek(SeekFrom::Start(self.entrypoint))?;
+        let mut de = Deserializer::new(&self.names, &self.strings, &mut self.stream);
+        V::deserialize(&mut de)
     }
 
     #[inline]

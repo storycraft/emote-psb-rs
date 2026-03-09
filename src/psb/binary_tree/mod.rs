@@ -8,33 +8,24 @@ use std::{
 use scopeguard::guard;
 
 use crate::{
-    psb::{binary_tree::util::SparseVec, table::StringTable, util::read_uint_array},
-    value::io::{
-        error::{PsbValueReadError, PsbValueWriteError},
-        read::PsbStreamValueReader,
-        write::PsbStreamValueWriter,
-    },
+    psb::{binary_tree::util::SparseVec, table::StringTable},
+    value::{de, util::read_uint_array},
 };
 
 /// Binary tree
 pub struct PsbBinaryTree(pub StringTable);
 
 impl PsbBinaryTree {
-    pub fn read_io(
-        stream: &mut (impl Read + Seek),
-        buf: &mut Vec<u64>,
-    ) -> Result<Self, PsbValueReadError> {
-        let mut reader = PsbStreamValueReader::new(stream);
-
+    pub fn read_io(stream: &mut (impl Read + Seek), buf: &mut Vec<u64>) -> Result<Self, de::Error> {
         let offsets_start = buf.len();
         let mut buf = guard(buf, |buf| {
             buf.drain(offsets_start..);
         });
-        read_uint_array(&mut reader, *buf)?;
+        read_uint_array(stream, *buf)?;
         let tree_start = buf.len();
-        read_uint_array(&mut reader, *buf)?;
+        read_uint_array(stream, *buf)?;
         let indexes_start = buf.len();
-        read_uint_array(&mut reader, *buf)?;
+        read_uint_array(stream, *buf)?;
 
         let offsets = &buf[offsets_start..tree_start];
         let tree = &buf[tree_start..indexes_start];
@@ -56,46 +47,46 @@ impl PsbBinaryTree {
                 name.push(decoded as u8);
             }
             name.reverse();
-            table.push(str::from_utf8(&name).map_err(|_| PsbValueReadError::InvalidValue)?);
+            table.push(str::from_utf8(&name).map_err(|_| de::Error::InvalidValue)?);
             name.clear();
         }
 
         Ok(Self(table))
     }
 
-    pub async fn write_tree(
-        &self,
-        writer: &mut PsbStreamValueWriter<impl Write>,
-    ) -> Result<(), PsbValueWriteError> {
-        let mut root = self.build_tree();
+    // pub fn write_tree(
+    //     &self,
+    //     writer: &mut impl Write,
+    // ) -> Result<(), PsbValueWriteError> {
+    //     let mut root = self.build_tree();
 
-        let mut offsets = SparseVec::new();
-        let mut tree = SparseVec::new();
-        let mut indexes = SparseVec::new();
+    //     let mut offsets = SparseVec::new();
+    //     let mut tree = SparseVec::new();
+    //     let mut indexes = SparseVec::new();
 
-        offsets.push(1);
-        self.make_sub_tree(&mut root, Vec::new(), &mut offsets, &mut tree, &mut indexes);
+    //     offsets.push(1);
+    //     self.make_sub_tree(&mut root, Vec::new(), &mut offsets, &mut tree, &mut indexes);
 
-        writer.write_uint_array(&offsets.into_inner())?;
-        writer.write_uint_array(&tree.into_inner())?;
-        writer.write_uint_array(&indexes.into_inner())?;
-        Ok(())
-    }
+    //     writer.write_uint_array(&offsets.into_inner())?;
+    //     writer.write_uint_array(&tree.into_inner())?;
+    //     writer.write_uint_array(&indexes.into_inner())?;
+    //     Ok(())
+    // }
 
-    fn build_tree(&self) -> TreeNode {
-        let mut root = TreeNode::new();
+    // fn build_tree(&self) -> TreeNode {
+    //     let mut root = TreeNode::new();
 
-        for data in self.0.iter() {
-            let mut last_node = &mut root;
+    //     for data in self.0.iter() {
+    //         let mut last_node = &mut root;
 
-            for byte in data.as_bytes() {
-                last_node = last_node.get_or_insert_mut(*byte);
-            }
-            last_node.get_or_insert(0);
-        }
+    //         for byte in data.as_bytes() {
+    //             last_node = last_node.get_or_insert_mut(*byte);
+    //         }
+    //         last_node.get_or_insert(0);
+    //     }
 
-        root
-    }
+    //     root
+    // }
 
     // Returns last node
     fn make_sub_tree(

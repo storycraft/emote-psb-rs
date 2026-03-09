@@ -2,7 +2,7 @@ use std::io;
 
 use thiserror::Error;
 
-use crate::value::io::error::PsbValueReadError;
+use crate::value::de;
 
 #[derive(Debug, Error)]
 pub enum PsbOpenError {
@@ -10,13 +10,13 @@ pub enum PsbOpenError {
     InvalidSignature,
 
     #[error("invalid names")]
-    Names(#[source] PsbValueReadError),
+    Names(#[source] de::Error),
 
     #[error("invalid strings")]
-    Strings(#[source] PsbValueReadError),
+    Strings(#[source] de::Error),
 
     #[error("invalid resources")]
-    Resources(#[source] PsbValueReadError),
+    Resources(#[source] de::Error),
 
     #[error(transparent)]
     Io(#[from] io::Error),
