@@ -49,7 +49,7 @@ pub struct MdfWriter<T: Write> {
 }
 
 impl<T: Write + Seek> MdfWriter<T> {
-    pub fn create(mut stream: T, level: u8) -> Result<Self, MdfCreateError> {
+    pub fn new(mut stream: T, level: u8) -> Result<Self, MdfCreateError> {
         // Write header
         stream.write_u32::<LittleEndian>(PSB_MDF_SIGNATURE)?;
         // Fill with zero for now
@@ -70,5 +70,15 @@ impl<T: Write + Seek> MdfWriter<T> {
         stream.write_u32::<LittleEndian>((end - self.stream_start) as u32)?;
         stream.seek(SeekFrom::Start(end))?;
         Ok(stream)
+    }
+}
+
+impl<T: Write> Write for MdfWriter<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
     }
 }
