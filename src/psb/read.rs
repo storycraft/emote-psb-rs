@@ -1,4 +1,4 @@
-use std::io::{BufRead, Seek, SeekFrom};
+use std::io::{self, BufRead, Read, Seek, SeekFrom, Take};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use scopeguard::guard;
@@ -177,9 +177,64 @@ impl<T: BufRead + Seek> PsbFile<T> {
         V::deserialize(&mut de)
     }
 
+    pub fn open_resource<'a>(
+        &'a mut self,
+        index: usize,
+    ) -> io::Result<Option<PsbResourceStream<'a, T>>> {
+        let Some(&res) = self.resources.get(index) else {
+            return Ok(None);
+        };
+
+        self.stream.seek(SeekFrom::Start(res.position))?;
+        Ok(Some(PsbResourceStream(Read::take(
+            &mut self.stream,
+            res.size,
+        ))))
+    }
+
+    pub fn open_extra_resource<'a>(
+        &'a mut self,
+        index: usize,
+    ) -> io::Result<Option<PsbResourceStream<'a, T>>> {
+        let Some(&res) = self.extra.get(index) else {
+            return Ok(None);
+        };
+
+        self.stream.seek(SeekFrom::Start(res.position))?;
+        Ok(Some(PsbResourceStream(Read::take(
+            &mut self.stream,
+            res.size,
+        ))))
+    }
+
     #[inline]
     pub fn into_inner(self) -> T {
         self.stream
+    }
+}
+
+#[repr(transparent)]
+pub struct PsbResourceStream<'a, T>(Take<&'a mut T>);
+
+impl<T: Read> Read for PsbResourceStream<'_, T> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl<T: Seek> Seek for PsbResourceStream<'_, T> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.0.seek(pos)
+    }
+}
+
+impl<T: BufRead> BufRead for PsbResourceStream<'_, T> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.0.fill_buf()
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.0.consume(amount);
     }
 }
 
