@@ -3,6 +3,8 @@ pub mod number;
 
 pub(crate) mod util;
 
+use std::collections::HashMap;
+
 use number::PsbNumber;
 
 pub const PSB_TYPE_NONE: u8 = 0x00;
@@ -43,31 +45,57 @@ pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
-pub enum PsbPrimitive {
-    None,
+pub enum PsbValue {
+    None(()),
     Null,
     Bool(bool),
     Number(PsbNumber),
-
     String(String),
     Resource(PsbResource),
     ExtraResource(PsbExtraResource),
 
-    CompilerNumber,
-    CompilerString,
-    CompilerResource,
-    CompilerDecimal,
-    CompilerArray,
-    CompilerBool,
-    CompilerBinaryTree,
+    List(Vec<PsbValue>),
+    Object(HashMap<String, PsbValue>),
+
+    CompilerNumber(PsbCompilerNumber),
+    CompilerString(PsbCompilerString),
+    CompilerResource(PsbCompilerResource),
+    CompilerDecimal(PsbCompilerDecimal),
+    CompilerArray(PsbCompilerArray),
+    CompilerBool(PsbCompilerBool),
+    CompilerBinaryTree(PsbCompilerBinaryTree),
 }
 
-const SERDE_RESOURCE_MARKER: &str = "@@PSB@RESOURCE";
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "@@PSB@RESOURCE")]
-pub struct PsbResource(#[from] pub u64);
+macro_rules! define_special_type {
+    ($vis:vis $name:ident $(: $val:ty)? = $marker:literal) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        #[serde(rename = $marker)]
+        $vis struct $name $((pub $val))?;
+        const _: () = {
+            impl $name {
+                pub(crate) const MARKER: &str = $marker;
+            }
 
-const SERDE_EXTRA_RESOURCE_MARKER: &str = "@@PSB@EXTRA@RESOURCE";
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From, serde::Serialize, serde::Deserialize)]
-#[serde(rename = "@@PSB@EXTRA@RESOURCE")]
-pub struct PsbExtraResource(#[from] pub u64);
+            $(
+                impl From<$val> for $name {
+                    fn from(v: $val) -> Self {
+                        Self(v)
+                    }
+                }
+            )?
+        };
+    };
+}
+
+define_special_type!(pub PsbResource: u32 = "@@PSB@RESOURCE");
+define_special_type!(pub PsbExtraResource: u32 = "@@PSB@EXTRA@RESOURCE");
+
+define_special_type!(pub PsbStringIndex: u32 = "@@PSB@STRING@RAW");
+
+define_special_type!(pub PsbCompilerNumber = "@@PSB@CP@NUMBER");
+define_special_type!(pub PsbCompilerString = "@@PSB@CP@STRING");
+define_special_type!(pub PsbCompilerResource = "@@PSB@CP@RESOURCE");
+define_special_type!(pub PsbCompilerDecimal = "@@PSB@CP@DECIMAL");
+define_special_type!(pub PsbCompilerArray = "@@PSB@CP@ARRAY");
+define_special_type!(pub PsbCompilerBool = "@@PSB@CP@BOOL");
+define_special_type!(pub PsbCompilerBinaryTree = "@@PSB@CP@BTREE");

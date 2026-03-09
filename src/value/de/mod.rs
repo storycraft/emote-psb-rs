@@ -9,7 +9,7 @@ use std::io::{BufRead, ErrorKind, Seek};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use serde::{
-    de::{IntoDeserializer, value::U32Deserializer},
+    de::{IntoDeserializer, Visitor},
     forward_to_deserialize_any,
 };
 
@@ -20,8 +20,9 @@ use crate::{
         PSB_COMPILER_INTEGER, PSB_COMPILER_RESOURCE, PSB_COMPILER_STRING, PSB_TYPE_DOUBLE,
         PSB_TYPE_EXTRA_N, PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0,
         PSB_TYPE_INTEGER_ARRAY_N, PSB_TYPE_INTEGER_N, PSB_TYPE_LIST, PSB_TYPE_NONE, PSB_TYPE_NULL,
-        PSB_TYPE_OBJECT, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE,
-        SERDE_EXTRA_RESOURCE_MARKER, SERDE_RESOURCE_MARKER,
+        PSB_TYPE_OBJECT, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE, PsbCompilerArray,
+        PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
+        PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource, PsbStringIndex,
         de::{
             map::PsbObject,
             seq::{List, UIntArray},
@@ -47,6 +48,14 @@ impl<'a, T: BufRead + Seek> Deserializer<'a, T> {
         }
     }
 
+    fn expect(&mut self, ty: u8) -> Result<(), Error> {
+        if ty == self.stream.read_u8()? {
+            Ok(())
+        } else {
+            Err(Error::InvalidValueType(ty))
+        }
+    }
+
     fn expect_range(&mut self, bounds: impl RangeBounds<u8>) -> Result<u8, Error> {
         let ty = self.stream.read_u8()?;
         if bounds.contains(&ty) {
@@ -59,7 +68,7 @@ impl<'a, T: BufRead + Seek> Deserializer<'a, T> {
     fn peek_ty(&mut self) -> Result<u8, Error> {
         self.stream
             .fill_buf()?
-            .get(0)
+            .first()
             .copied()
             .ok_or(Error::Io(ErrorKind::UnexpectedEof.into()))
     }
@@ -69,9 +78,31 @@ impl<'a, T: BufRead + Seek> Deserializer<'a, T> {
         let len = read_uint_array(&mut self.stream, &mut self.buf)?;
         Ok(start..(start + len))
     }
+
+    fn deserialize_ref<V: Visitor<'static>>(
+        &mut self,
+        ty: u8,
+        size: u8,
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        let n = self.expect_range((ty + 1)..=(ty + size))? - ty;
+        let idx: u32 = read_partial_uint(&mut self.stream, n)?
+            .try_into()
+            .map_err(|_| Error::InvalidValue)?;
+        visitor.visit_newtype_struct(idx.into_deserializer())
+    }
+
+    fn deserialize_compiler_unit<V: Visitor<'static>>(
+        &mut self,
+        ty: u8,
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        self.expect(ty)?;
+        visitor.visit_newtype_struct(().into_deserializer())
+    }
 }
 
-impl<'a, T: BufRead + Seek> serde::Deserializer<'static> for &'a mut Deserializer<'_, T> {
+impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -133,14 +164,6 @@ impl<'a, T: BufRead + Seek> serde::Deserializer<'static> for &'a mut Deserialize
                 res
             }
 
-            PSB_COMPILER_INTEGER
-            | PSB_COMPILER_STRING
-            | PSB_COMPILER_RESOURCE
-            | PSB_COMPILER_ARRAY
-            | PSB_COMPILER_DECIMAL
-            | PSB_COMPILER_BOOL
-            | PSB_COMPILER_BINARY_TREE => visitor.visit_unit(),
-
             ty => Err(Error::InvalidValueType(ty)),
         }
     }
@@ -160,30 +183,27 @@ impl<'a, T: BufRead + Seek> serde::Deserializer<'static> for &'a mut Deserialize
     where
         V: serde::de::Visitor<'static>,
     {
-        const PSB_TYPE_RESOURCE_START: u8 = PSB_TYPE_RESOURCE_N + 1;
-        const PSB_TYPE_RESOURCE_MAX: u8 = PSB_TYPE_RESOURCE_N + 4;
-        const PSB_TYPE_EXTRA_START: u8 = PSB_TYPE_EXTRA_N + 1;
-        const PSB_TYPE_EXTRA_MAX: u8 = PSB_TYPE_EXTRA_N + 4;
-
         match name {
-            SERDE_RESOURCE_MARKER => {
-                let n = self.expect_range(PSB_TYPE_RESOURCE_START..=PSB_TYPE_RESOURCE_MAX)?
-                    - PSB_TYPE_RESOURCE_N;
-                let idx: u32 = read_partial_uint(&mut self.stream, n)?
-                    .try_into()
-                    .map_err(|_| Error::InvalidValue)?;
-                let de: U32Deserializer<Error> = idx.into_deserializer();
-                visitor.visit_newtype_struct(de)
-            }
+            PsbStringIndex::MARKER => self.deserialize_ref(PSB_TYPE_STRING_N, 4, visitor),
+            PsbResource::MARKER => self.deserialize_ref(PSB_TYPE_RESOURCE_N, 4, visitor),
+            PsbExtraResource::MARKER => self.deserialize_ref(PSB_TYPE_EXTRA_N, 4, visitor),
 
-            SERDE_EXTRA_RESOURCE_MARKER => {
-                let n = self.expect_range(PSB_TYPE_EXTRA_START..=PSB_TYPE_EXTRA_MAX)?
-                    - PSB_TYPE_EXTRA_N;
-                let idx: u32 = read_partial_uint(&mut self.stream, n)?
-                    .try_into()
-                    .map_err(|_| Error::InvalidValue)?;
-                let de: U32Deserializer<Error> = idx.into_deserializer();
-                visitor.visit_newtype_struct(de)
+            PsbCompilerNumber::MARKER => {
+                self.deserialize_compiler_unit(PSB_COMPILER_INTEGER, visitor)
+            }
+            PsbCompilerString::MARKER => {
+                self.deserialize_compiler_unit(PSB_COMPILER_STRING, visitor)
+            }
+            PsbCompilerResource::MARKER => {
+                self.deserialize_compiler_unit(PSB_COMPILER_RESOURCE, visitor)
+            }
+            PsbCompilerDecimal::MARKER => {
+                self.deserialize_compiler_unit(PSB_COMPILER_DECIMAL, visitor)
+            }
+            PsbCompilerArray::MARKER => self.deserialize_compiler_unit(PSB_COMPILER_ARRAY, visitor),
+            PsbCompilerBool::MARKER => self.deserialize_compiler_unit(PSB_COMPILER_BOOL, visitor),
+            PsbCompilerBinaryTree::MARKER => {
+                self.deserialize_compiler_unit(PSB_COMPILER_BINARY_TREE, visitor)
             }
 
             _ => visitor.visit_newtype_struct(self),

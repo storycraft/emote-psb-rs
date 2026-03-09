@@ -2,7 +2,7 @@ mod util;
 
 use std::{
     collections::{HashMap, hash_map},
-    io::{Read, Seek, Write},
+    io::{Read, Seek},
 };
 
 use scopeguard::guard;
