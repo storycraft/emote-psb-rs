@@ -41,7 +41,7 @@ pub const PSB_COMPILER_ARRAY: u8 = 0x84;
 pub const PSB_COMPILER_BOOL: u8 = 0x85;
 pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum PsbPrimitive {
     None,
@@ -49,9 +49,9 @@ pub enum PsbPrimitive {
     Bool(bool),
     Number(PsbNumber),
 
-    String(u32),
-    Resource(u32),
-    ExtraResource(u32),
+    String(String),
+    Resource(PsbResource),
+    ExtraResource(PsbExtraResource),
 
     CompilerNumber,
     CompilerString,
@@ -62,5 +62,12 @@ pub enum PsbPrimitive {
     CompilerBinaryTree,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From)]
-pub struct PsbNameIndex(#[from] pub u64);
+const SERDE_RESOURCE_MARKER: &str = "@@PSB@RESOURCE";
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "@@PSB@RESOURCE")]
+pub struct PsbResource(#[from] pub u64);
+
+const SERDE_EXTRA_RESOURCE_MARKER: &str = "@@PSB@EXTRA@RESOURCE";
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From, serde::Serialize, serde::Deserialize)]
+#[serde(rename = "@@PSB@EXTRA@RESOURCE")]
+pub struct PsbExtraResource(#[from] pub u64);
