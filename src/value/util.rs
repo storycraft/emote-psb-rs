@@ -55,28 +55,8 @@ pub fn write_partial_uint(stream: &mut impl Write, v: u64, size: u8) -> io::Resu
     }
 }
 
-pub fn get_n(mut number: i64) -> u8 {
-    if number < 0 {
-        number = -number;
-    }
-
-    if number <= 0x7f {
-        1
-    } else if number <= 0x7fff {
-        2
-    } else if number <= 0x7fffff {
-        3
-    } else if number <= 0x7fffffff {
-        4
-    } else if number <= 0x7fffffffff {
-        5
-    } else if number <= 0x7fffffffffff {
-        6
-    } else if number <= 0x7fffffffffffff {
-        7
-    } else {
-        8
-    }
+pub fn get_n(number: i64) -> u8 {
+    get_uint_n(number.abs() as u64)
 }
 
 pub fn get_uint_n(number: u64) -> u8 {
