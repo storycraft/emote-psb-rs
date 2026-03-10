@@ -1,5 +1,6 @@
 pub mod de;
 pub mod number;
+pub mod ser;
 
 pub(crate) mod util;
 
@@ -51,6 +52,7 @@ pub enum PsbValue {
     Bool(bool),
     Number(PsbNumber),
     String(String),
+
     Resource(PsbResource),
     ExtraResource(PsbExtraResource),
     UIntArray(PsbUIntArray),
@@ -119,7 +121,7 @@ macro_rules! define_special_type {
     };
 }
 
-define_special_type!(pub PsbUIntArray: Vec<u64> = "@@PSB@RESOURCE");
+define_special_type!(pub PsbUIntArray: Vec<u64> = "@@PSB@UINT@ARRAY");
 
 define_special_type!(pub PsbResource: u32 = "@@PSB@RESOURCE");
 define_special_type!(pub PsbExtraResource: u32 = "@@PSB@EXTRA@RESOURCE");
