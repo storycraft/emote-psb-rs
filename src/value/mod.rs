@@ -53,6 +53,7 @@ pub enum PsbValue {
     String(String),
     Resource(PsbResource),
     ExtraResource(PsbExtraResource),
+    UIntArray(PsbUIntArray),
 
     List(Vec<PsbValue>),
     Object(HashMap<String, PsbValue>),
@@ -68,7 +69,7 @@ pub enum PsbValue {
 
 macro_rules! define_special_type {
     ($vis:vis $name:ident $(: $val:ty)? = $marker:literal) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
         $vis struct $name $((pub $val))?;
 
         #[allow(unused_parens)]
@@ -87,6 +88,7 @@ macro_rules! define_special_type {
 
             #[derive(serde::Serialize, serde::Deserialize)]
             #[serde(rename = $marker)]
+            #[repr(transparent)]
             struct __Inner {
                 #[serde(rename = $marker)]
                 field: ($($val)?),
@@ -97,7 +99,8 @@ macro_rules! define_special_type {
                 where
                     S: serde::Serializer,
                 {
-                    __Inner { field: ($(self.0 as $val)?) }.serialize(__serializer)
+                    let proj = unsafe { ::core::mem::transmute::<&Self, &__Inner>(self) };
+                    proj.serialize(__serializer)
                 }
             }
 
@@ -112,6 +115,8 @@ macro_rules! define_special_type {
         };
     };
 }
+
+define_special_type!(pub PsbUIntArray: Vec<u64> = "@@PSB@RESOURCE");
 
 define_special_type!(pub PsbResource: u32 = "@@PSB@RESOURCE");
 define_special_type!(pub PsbExtraResource: u32 = "@@PSB@EXTRA@RESOURCE");

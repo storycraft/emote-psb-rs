@@ -5,14 +5,11 @@ mod special;
 
 pub use error::Error;
 
-use core::ops::{Range, RangeBounds};
+use core::ops::Range;
 use std::io::{BufRead, ErrorKind, Seek};
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use serde::{
-    de::{IntoDeserializer, Visitor},
-    forward_to_deserialize_any,
-};
+use serde::{de::value::SeqAccessDeserializer, forward_to_deserialize_any};
 
 use crate::{
     psb::table::StringTable,
@@ -23,7 +20,7 @@ use crate::{
         PSB_TYPE_INTEGER_ARRAY_N, PSB_TYPE_INTEGER_N, PSB_TYPE_LIST, PSB_TYPE_NONE, PSB_TYPE_NULL,
         PSB_TYPE_OBJECT, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE, PsbCompilerArray,
         PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
-        PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource,
+        PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource, PsbUIntArray,
         de::{
             map::PsbObject,
             seq::{List, UIntArray},
@@ -50,15 +47,6 @@ impl<'a, T: BufRead + Seek> Deserializer<'a, T> {
         }
     }
 
-    fn expect_range(&mut self, bounds: impl RangeBounds<u8>) -> Result<u8, Error> {
-        let ty = self.stream.read_u8()?;
-        if bounds.contains(&ty) {
-            Ok(ty)
-        } else {
-            Err(Error::InvalidValueType(ty))
-        }
-    }
-
     fn peek_ty(&mut self) -> Result<u8, Error> {
         self.stream
             .fill_buf()?
@@ -71,19 +59,6 @@ impl<'a, T: BufRead + Seek> Deserializer<'a, T> {
         let start = self.buf.len();
         let len = read_uint_array(&mut self.stream, &mut self.buf)?;
         Ok(start..(start + len))
-    }
-
-    fn deserialize_ref<V: Visitor<'static>>(
-        &mut self,
-        ty: u8,
-        size: u8,
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        let n = self.expect_range((ty + 1)..=(ty + size))? - ty;
-        let idx: u32 = read_partial_uint(&mut self.stream, n)?
-            .try_into()
-            .map_err(|_| Error::InvalidValue)?;
-        visitor.visit_newtype_struct(idx.into_deserializer())
     }
 }
 
@@ -148,7 +123,18 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
             ty @ PSB_TYPE_INTEGER_ARRAY_START..=PSB_TYPE_INTEGER_ARRAY_MAX => {
                 let len = read_partial_uint(&mut self.stream, ty - PSB_TYPE_INTEGER_ARRAY_N)?;
                 let item_byte_size = self.stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N;
-                visitor.visit_seq(UIntArray::new(len as _, item_byte_size, &mut self.stream))
+
+                dbg!(ty);
+
+                SpecialTypeDeserializer::new(
+                    PsbUIntArray::MARKER,
+                    SeqAccessDeserializer::new(UIntArray::new(
+                        len as _,
+                        item_byte_size,
+                        &mut self.stream,
+                    )),
+                )
+                .deserialize(visitor)
             }
 
             PSB_TYPE_LIST => {

@@ -44,6 +44,10 @@ pub fn read_partial_int(stream: &mut impl Read, size: u8) -> io::Result<i64> {
     ))
 }
 
+pub fn write_partial_int(stream: &mut impl Write, v: i64, size: u8) -> io::Result<()> {
+    write_partial_uint(stream, u64::from_ne_bytes(v.to_ne_bytes()), size)
+}
+
 pub fn write_partial_uint(stream: &mut impl Write, v: u64, size: u8) -> io::Result<()> {
     match size {
         0 => Ok(()),

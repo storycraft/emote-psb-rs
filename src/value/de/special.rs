@@ -2,38 +2,41 @@ use serde::de::{IntoDeserializer, MapAccess, Visitor};
 
 use crate::value::de::Error;
 
-pub struct SpecialTypeDeserializer<T> {
+pub struct SpecialTypeDeserializer<I> {
     marker: &'static str,
-    value: Option<T>,
+    inner: Option<I>,
 }
 
-impl<T> SpecialTypeDeserializer<T>
+impl<'de, I> SpecialTypeDeserializer<I>
 where
-    T: IntoDeserializer<'static, Error>,
+    I: IntoDeserializer<'de, Error>,
 {
-    pub const fn new(marker: &'static str, value: T) -> Self {
+    pub fn new(marker: &'static str, inner: I) -> Self {
         Self {
             marker,
-            value: Some(value),
+            inner: Some(inner),
         }
     }
 
-    pub fn deserialize<V: Visitor<'static>>(self, visitor: V) -> Result<V::Value, Error> {
+    pub fn deserialize<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
         visitor.visit_map(self)
     }
 }
 
-impl<T> MapAccess<'static> for SpecialTypeDeserializer<T>
+impl<'de, I> MapAccess<'de> for SpecialTypeDeserializer<I>
 where
-    T: IntoDeserializer<'static, Error>,
+    I: IntoDeserializer<'de, Error>,
 {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
     where
-        K: serde::de::DeserializeSeed<'static>,
+        K: serde::de::DeserializeSeed<'de>,
     {
-        if self.value.is_some() {
+        if self.inner.is_some() {
             seed.deserialize(self.marker.into_deserializer()).map(Some)
         } else {
             Ok(None)
@@ -42,12 +45,12 @@ where
 
     fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
     where
-        V: serde::de::DeserializeSeed<'static>,
+        V: serde::de::DeserializeSeed<'de>,
     {
-        let Some(value) = self.value.take() else {
+        let Some(de) = self.inner.take() else {
             unreachable!();
         };
 
-        seed.deserialize(value.into_deserializer())
+        seed.deserialize(de.into_deserializer())
     }
 }
