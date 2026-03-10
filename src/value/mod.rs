@@ -121,15 +121,15 @@ macro_rules! define_special_type {
     };
 }
 
-define_special_type!(pub PsbUIntArray: Vec<u64> = "@@PSB@UINT@ARRAY");
+define_special_type!(pub PsbUIntArray: Vec<u64> = "__PSB@UINT@ARRAY");
 
-define_special_type!(pub PsbResource: u32 = "@@PSB@RESOURCE");
-define_special_type!(pub PsbExtraResource: u32 = "@@PSB@EXTRA@RESOURCE");
+define_special_type!(pub PsbResource: u32 = "__PSB@RESOURCE");
+define_special_type!(pub PsbExtraResource: u32 = "__PSB@EXTRA@RESOURCE");
 
-define_special_type!(pub PsbCompilerNumber = "@@PSB@CP@NUMBER");
-define_special_type!(pub PsbCompilerString = "@@PSB@CP@STRING");
-define_special_type!(pub PsbCompilerResource = "@@PSB@CP@RESOURCE");
-define_special_type!(pub PsbCompilerDecimal = "@@PSB@CP@DECIMAL");
-define_special_type!(pub PsbCompilerArray = "@@PSB@CP@ARRAY");
-define_special_type!(pub PsbCompilerBool = "@@PSB@CP@BOOL");
-define_special_type!(pub PsbCompilerBinaryTree = "@@PSB@CP@BTREE");
+define_special_type!(pub PsbCompilerNumber = "__PSB@CP@NUMBER");
+define_special_type!(pub PsbCompilerString = "__PSB@CP@STRING");
+define_special_type!(pub PsbCompilerResource = "__PSB@CP@RESOURCE");
+define_special_type!(pub PsbCompilerDecimal = "__PSB@CP@DECIMAL");
+define_special_type!(pub PsbCompilerArray = "__PSB@CP@ARRAY");
+define_special_type!(pub PsbCompilerBool = "__PSB@CP@BOOL");
+define_special_type!(pub PsbCompilerBinaryTree = "__PSB@CP@BTREE");
