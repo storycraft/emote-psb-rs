@@ -14,9 +14,9 @@ use crate::value::{
     PSB_COMPILER_ARRAY, PSB_COMPILER_BINARY_TREE, PSB_COMPILER_BOOL, PSB_COMPILER_DECIMAL,
     PSB_COMPILER_INTEGER, PSB_COMPILER_RESOURCE, PSB_COMPILER_STRING, PSB_TYPE_DOUBLE,
     PSB_TYPE_EXTRA_N, PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0, PSB_TYPE_INTEGER_N,
-    PSB_TYPE_NONE, PSB_TYPE_NULL, PSB_TYPE_RESOURCE_N, PSB_TYPE_TRUE, PsbCompilerArray,
-    PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
-    PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource, PsbUIntArray,
+    PSB_TYPE_NULL, PSB_TYPE_RESOURCE_N, PSB_TYPE_TRUE, PsbCompilerArray, PsbCompilerBinaryTree,
+    PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber, PsbCompilerResource, PsbCompilerString,
+    PsbExtraResource, PsbResource, PsbUIntArray,
     ser::{
         map::{MapSerializer, StructSerializer},
         seq::SeqSerializer,
@@ -135,8 +135,7 @@ where
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        self.stream.write_u8(PSB_TYPE_NULL)?;
-        Ok(1)
+        self.serialize_unit()
     }
 
     fn serialize_some<V>(self, value: &V) -> Result<Self::Ok, Self::Error>
@@ -147,7 +146,7 @@ where
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        self.stream.write_u8(PSB_TYPE_NONE)?;
+        self.stream.write_u8(PSB_TYPE_NULL)?;
         Ok(1)
     }
 
