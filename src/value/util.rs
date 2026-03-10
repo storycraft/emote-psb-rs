@@ -45,7 +45,7 @@ pub fn read_partial_int(stream: &mut impl Read, size: u8) -> io::Result<i64> {
             let mut buf = [0_u8; 8];
             let len = size as usize;
             stream.read_exact(&mut buf[..len])?;
-            if buf[len] > 0x7f {
+            if buf[len - 1] > 0x7f {
                 buf[len..].fill(0xff);
             }
 
