@@ -73,7 +73,7 @@ pub fn write_partial_uint(stream: &mut impl Write, v: u64, size: u8) -> io::Resu
 }
 
 pub fn get_n(number: i64) -> u8 {
-    get_uint_n(number.unsigned_abs())
+    get_uint_n(!number as u64)
 }
 
 pub fn get_uint_n(number: u64) -> u8 {
