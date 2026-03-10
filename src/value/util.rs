@@ -39,9 +39,21 @@ pub fn read_partial_uint(stream: &mut impl Read, size: u8) -> io::Result<u64> {
 }
 
 pub fn read_partial_int(stream: &mut impl Read, size: u8) -> io::Result<i64> {
-    Ok(i64::from_ne_bytes(
-        read_partial_uint(stream, size)?.to_ne_bytes(),
-    ))
+    match size {
+        0 => Ok(0),
+        size @ 1..=8 => {
+            let mut buf = [0_u8; 8];
+            let len = size as usize;
+            stream.read_exact(&mut buf[..len])?;
+            if buf[len] > 0x7f {
+                buf[len..].fill(0xff);
+            }
+
+            Ok(i64::from_le_bytes(buf))
+        }
+
+        _ => Err(io::Error::from(io::ErrorKind::InvalidInput)),
+    }
 }
 
 pub fn write_partial_int(stream: &mut impl Write, v: i64, size: u8) -> io::Result<()> {
