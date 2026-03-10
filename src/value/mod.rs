@@ -78,6 +78,8 @@ macro_rules! define_special_type {
                 pub(crate) const MARKER: &str = $marker;
             }
 
+            impl Copy for $name where for<'lt> ($($val)?): Copy {}
+
             $(
                 impl From<$val> for $name {
                     fn from(v: $val) -> Self {
@@ -99,6 +101,7 @@ macro_rules! define_special_type {
                 where
                     S: serde::Serializer,
                 {
+                    // SAFETY: project transparent wrapper
                     let proj = unsafe { ::core::mem::transmute::<&Self, &__Inner>(self) };
                     proj.serialize(__serializer)
                 }

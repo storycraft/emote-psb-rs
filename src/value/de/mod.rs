@@ -124,8 +124,6 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
                 let len = read_partial_uint(&mut self.stream, ty - PSB_TYPE_INTEGER_ARRAY_N)?;
                 let item_byte_size = self.stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N;
 
-                dbg!(ty);
-
                 SpecialTypeDeserializer::new(
                     PsbUIntArray::MARKER,
                     SeqAccessDeserializer::new(UIntArray::new(
