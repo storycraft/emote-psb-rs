@@ -8,6 +8,9 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] io::Error),
 
+    #[error("invalid psb specific value. marker: {0}")]
+    InvalidValue(&'static str),
+
     #[error("{0}")]
     Message(String),
 }

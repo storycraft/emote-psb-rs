@@ -173,7 +173,11 @@ impl<T: BufRead + Seek> PsbFile<T> {
 
     pub fn root_deserializer<'a>(&'a mut self) -> io::Result<Deserializer<'a, &'a mut T>> {
         self.stream.seek(SeekFrom::Start(self.entrypoint))?;
-        Ok(Deserializer::new(&self.names, &self.strings, &mut self.stream))
+        Ok(Deserializer::new(
+            &self.names,
+            &self.strings,
+            &mut self.stream,
+        ))
     }
 
     pub fn deserialize_root<V: DeserializeOwned>(&mut self) -> Result<V, de::Error> {

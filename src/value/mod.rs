@@ -1,5 +1,6 @@
 pub mod de;
 pub mod number;
+pub mod ser;
 
 pub(crate) mod util;
 
