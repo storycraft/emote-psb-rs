@@ -2,16 +2,13 @@ use core::ops::Range;
 use std::io::{BufRead, Seek, SeekFrom};
 
 use serde::{
-    de::{IntoDeserializer, MapAccess, Visitor},
+    de::{MapAccess, Visitor},
     forward_to_deserialize_any,
 };
 
 use crate::{
     psb::table::StringTable,
-    value::{
-        PsbNameIndex,
-        de::{Deserializer, Error, error},
-    },
+    value::de::{Deserializer, Error, error},
 };
 
 pub struct PsbObject<'a, 'b, T> {
@@ -86,25 +83,10 @@ impl<'a> serde::Deserializer<'static> for NameDeserializer<'a> {
         visitor.visit_str(name)
     }
 
-    fn deserialize_newtype_struct<V>(
-        self,
-        name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'static>,
-    {
-        if name == PsbNameIndex::MARKER {
-            return visitor.visit_newtype_struct(self.id.into_deserializer());
-        }
-
-        self.deserialize_any(visitor)
-    }
-
     forward_to_deserialize_any! {
         <V: Visitor<'static>>
         bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct seq tuple
+        bytes byte_buf option unit unit_struct newtype_struct seq tuple
         tuple_struct map struct enum identifier ignored_any
     }
 }

@@ -116,9 +116,6 @@ macro_rules! define_special_type {
 define_special_type!(pub PsbResource: u32 = "@@PSB@RESOURCE");
 define_special_type!(pub PsbExtraResource: u32 = "@@PSB@EXTRA@RESOURCE");
 
-define_special_type!(pub PsbNameIndex: u32 = "@@PSB@NAME@RAW");
-define_special_type!(pub PsbStringIndex: u32 = "@@PSB@STRING@RAW");
-
 define_special_type!(pub PsbCompilerNumber = "@@PSB@CP@NUMBER");
 define_special_type!(pub PsbCompilerString = "@@PSB@CP@STRING");
 define_special_type!(pub PsbCompilerResource = "@@PSB@CP@RESOURCE");

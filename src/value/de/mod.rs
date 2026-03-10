@@ -23,7 +23,7 @@ use crate::{
         PSB_TYPE_INTEGER_ARRAY_N, PSB_TYPE_INTEGER_N, PSB_TYPE_LIST, PSB_TYPE_NONE, PSB_TYPE_NULL,
         PSB_TYPE_OBJECT, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE, PsbCompilerArray,
         PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
-        PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource, PsbStringIndex,
+        PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource,
         de::{
             map::PsbObject,
             seq::{List, UIntArray},
@@ -205,16 +205,12 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
 
     fn deserialize_newtype_struct<V>(
         self,
-        name: &'static str,
+        _name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: serde::de::Visitor<'static>,
     {
-        if name == PsbStringIndex::MARKER {
-            return self.deserialize_ref(PSB_TYPE_STRING_N, 4, visitor);
-        }
-
         visitor.visit_newtype_struct(self)
     }
 
