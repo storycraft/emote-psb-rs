@@ -1,7 +1,6 @@
 use core::fmt::Display;
 use std::io;
 
-use serde::de;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -19,7 +18,7 @@ pub enum Error {
     Message(String),
 }
 
-impl de::Error for Error {
+impl serde::de::Error for Error {
     fn custom<T: Display>(msg: T) -> Self {
         Self::Message(msg.to_string())
     }

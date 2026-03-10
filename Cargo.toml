@@ -9,7 +9,7 @@ repository = "https://github.com/storycraft/emote-psb-rs"
 keywords = ["e-mote", "psb", "scn", "mdf"]
 
 [dependencies]
-adler = "1.0.2"
+adler2 = "2.0.1"
 serde = { version = "1.0.0", features = ["derive"] }
 thiserror = "2.0.18"
 derive_more = { version = "2.1.1", features = ["from"] }
