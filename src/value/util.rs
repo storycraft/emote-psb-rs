@@ -17,6 +17,7 @@ pub fn read_uint_array(stream: &mut impl Read, buf: &mut Vec<u64>) -> Result<usi
 
     let len = read_partial_uint(stream, len_n)?;
     let item_byte_size = stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N;
+    buf.reserve(len as _);
     for _ in 0..len {
         buf.push(read_partial_uint(stream, item_byte_size)?);
     }

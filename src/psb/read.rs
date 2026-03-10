@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     PSB_SIGNATURE,
-    psb::{binary_tree::PsbBinaryTree, error::PsbOpenError, table::StringTable},
+    psb::{btree::PsbBtree, error::PsbOpenError, table::StringTable},
     value::{
         de::{self, Deserializer},
         util::read_uint_array,
@@ -83,7 +83,7 @@ impl<T: BufRead + Seek> PsbFile<T> {
         };
 
         stream.seek(std::io::SeekFrom::Start(start + name_offset as u64))?;
-        let names = PsbBinaryTree::read_io(&mut stream, &mut buf)
+        let names = PsbBtree::read(&mut stream, &mut buf)
             .map_err(PsbOpenError::Names)?
             .0;
 
@@ -127,7 +127,7 @@ impl<T: BufRead + Seek> PsbFile<T> {
             stream.seek(SeekFrom::Start(data_pos + offset))?;
             stream.read_until(0x00, &mut string_buf)?;
             string_buf.pop();
-            table.push(str::from_utf8(&string_buf).map_err(|_| de::Error::InvalidValue)?);
+            table.push_str(str::from_utf8(&string_buf).map_err(|_| de::Error::InvalidValue)?);
             string_buf.clear();
         }
 

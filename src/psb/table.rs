@@ -27,9 +27,17 @@ impl StringTable {
         }
     }
 
-    pub fn push(&mut self, str: &str) -> usize {
+    pub fn push(&mut self, data: impl IntoIterator<Item = char>) -> usize {
         let start = self.data.len();
-        self.data.push_str(str);
+        self.data.extend(data);
+        let id = self.indices.len();
+        self.indices.push(start);
+        id
+    }
+
+    pub fn push_str(&mut self, data: &str) -> usize {
+        let start = self.data.len();
+        self.data.push_str(data);
         let id = self.indices.len();
         self.indices.push(start);
         id
