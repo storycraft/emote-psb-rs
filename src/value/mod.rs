@@ -1,6 +1,5 @@
 pub mod de;
 pub mod number;
-pub mod ser;
 
 pub(crate) mod util;
 
@@ -47,7 +46,9 @@ pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum PsbValue {
-    None(()),
+    #[serde(with = "none")]
+    None,
+    #[serde(with = "null")]
     Null,
     Bool(bool),
     Number(PsbNumber),
@@ -67,6 +68,66 @@ pub enum PsbValue {
     CompilerArray(PsbCompilerArray),
     CompilerBool(PsbCompilerBool),
     CompilerBinaryTree(PsbCompilerBinaryTree),
+}
+
+mod none {
+    use core::fmt;
+
+    use serde::{Deserializer, Serializer, de::Visitor};
+
+    pub fn serialize<S: Serializer>(se: S) -> Result<S::Ok, S::Error> {
+        se.serialize_unit()
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<(), D::Error> {
+        struct NoneVisitor;
+        impl Visitor<'_> for NoneVisitor {
+            type Value = ();
+
+            fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                write!(fmt, "an null value")
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(())
+            }
+        }
+
+        de.deserialize_unit(NoneVisitor)
+    }
+}
+
+mod null {
+    use core::fmt;
+
+    use serde::{Deserializer, Serializer, de::Visitor};
+
+    pub fn serialize<S: Serializer>(se: S) -> Result<S::Ok, S::Error> {
+        se.serialize_none()
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<(), D::Error> {
+        struct NullVisitor;
+        impl Visitor<'_> for NullVisitor {
+            type Value = ();
+
+            fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                write!(fmt, "an null value")
+            }
+
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(())
+            }
+        }
+
+        de.deserialize_option(NullVisitor)
+    }
 }
 
 macro_rules! define_special_type {
