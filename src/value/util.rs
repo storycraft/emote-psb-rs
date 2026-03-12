@@ -1,6 +1,6 @@
 use std::io::{self, Read, Write};
 
-use byteorder::ReadBytesExt;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 
 use crate::value::{PSB_TYPE_INTEGER_ARRAY_N, de};
 
@@ -22,6 +22,26 @@ pub fn read_uint_array(stream: &mut impl Read, buf: &mut Vec<u64>) -> Result<usi
         buf.push(read_partial_uint(stream, item_byte_size)?);
     }
     Ok(len as _)
+}
+
+pub fn write_uint_array(stream: &mut impl Write, buf: &[impl Into<u64> + Copy]) -> io::Result<()> {
+    let len_n = get_uint_n(buf.len() as _);
+    stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + len_n)?;
+    stream.write_all(&buf.len().to_le_bytes()[..len_n as _])?;
+
+    let max_v = buf
+        .iter()
+        .copied()
+        .map(Into::into)
+        .max()
+        .unwrap_or_default();
+    let max_n = get_uint_n(max_v);
+    stream.write_u8(PSB_TYPE_INTEGER_ARRAY_N + max_n)?;
+    for v in buf.iter().copied().map(Into::into) {
+        stream.write_all(&v.to_le_bytes()[..max_n as _])?;
+    }
+
+    Ok(())
 }
 
 pub fn read_partial_uint(stream: &mut impl Read, size: u8) -> io::Result<u64> {
@@ -50,22 +70,6 @@ pub fn read_partial_int(stream: &mut impl Read, size: u8) -> io::Result<i64> {
             }
 
             Ok(i64::from_le_bytes(buf))
-        }
-
-        _ => Err(io::Error::from(io::ErrorKind::InvalidInput)),
-    }
-}
-
-pub fn write_partial_int(stream: &mut impl Write, v: i64, size: u8) -> io::Result<()> {
-    write_partial_uint(stream, u64::from_ne_bytes(v.to_ne_bytes()), size)
-}
-
-pub fn write_partial_uint(stream: &mut impl Write, v: u64, size: u8) -> io::Result<()> {
-    match size {
-        0 => Ok(()),
-        1..=8 => {
-            stream.write_all(&v.to_le_bytes()[..size as usize])?;
-            Ok(())
         }
 
         _ => Err(io::Error::from(io::ErrorKind::InvalidInput)),

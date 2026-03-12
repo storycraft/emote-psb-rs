@@ -1,10 +1,15 @@
+use byteorder::WriteBytesExt;
 use serde::ser::{Impossible, SerializeMap, SerializeStruct, SerializeStructVariant};
 
-use crate::value::ser::{
-    Error, Serializer,
-    buffer::{Buffer, BufferValue},
-    special::SpecialValueSerializer,
-    value::{ref_type::RefTypeSerializer, unit::UnitTypeSerializer},
+use crate::value::{
+    PSB_TYPE_OBJECT,
+    ser::{
+        Error, Serializer,
+        buffer::{Buffer, BufferObject, BufferValue},
+        special::SpecialValueSerializer,
+        value::{ref_type::RefTypeSerializer, unit::UnitTypeSerializer},
+    },
+    util::write_uint_array,
 };
 
 pub enum StructSerializer<'a> {
@@ -39,13 +44,25 @@ impl<'a> SerializeStruct for StructSerializer<'a> {
 
 pub struct MapSerializer<'a> {
     len: usize,
+    map_index: usize,
+    key_start: usize,
+    offset_start: usize,
     buf: &'a mut Buffer,
 }
 
 impl<'a> MapSerializer<'a> {
-    #[inline]
-    pub const fn new(buf: &'a mut Buffer) -> Self {
-        Self { len: 0, buf }
+    pub fn new(buf: &'a mut Buffer) -> Self {
+        let map_index = buf.values.len();
+        buf.values.push(BufferValue::Invalid);
+        let key_start = buf.keys.len();
+        let offset_start = buf.offsets.len();
+        Self {
+            len: 0,
+            map_index,
+            key_start,
+            offset_start,
+            buf,
+        }
     }
 }
 
@@ -66,17 +83,32 @@ impl<'a> SerializeMap for MapSerializer<'a> {
     where
         T: ?Sized + serde::Serialize,
     {
+        let index = self.buf.values.len();
         value.serialize(Serializer(self.buf))?;
+        self.buf
+            .offsets
+            .push(self.buf.values[index].size(self.buf) as u64);
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        let key_start = self.buf.keys.len() - self.len;
-        let index = self.buf.values.len() - self.len;
-        self.buf.values[index] = BufferValue::Map {
-            key_start,
+        let header_start = self.buf.bytes.len();
+        self.buf.bytes.write_u8(PSB_TYPE_OBJECT)?;
+        write_uint_array(&mut self.buf.bytes, &self.buf.keys[self.key_start..])?;
+        write_uint_array(&mut self.buf.bytes, &self.buf.offsets[self.offset_start..])?;
+        let header_end = self.buf.bytes.len();
+
+        self.buf.keys.drain(self.key_start..);
+        self.buf.offsets.drain(self.offset_start..);
+
+        let index = self.buf.objects.len();
+        self.buf.objects.push(BufferObject {
             len: self.len,
-        };
+            header_start,
+            header_size: header_end - header_start,
+        });
+
+        self.buf.values[self.map_index] = BufferValue::Object { index };
         Ok(self.buf)
     }
 }
@@ -128,7 +160,7 @@ impl<'a> serde::Serializer for NameSerializer<'a> {
     type SerializeMap = Impossible<&'a mut Buffer, Error>;
     type SerializeStruct = Impossible<&'a mut Buffer, Error>;
     type SerializeStructVariant = Impossible<&'a mut Buffer, Error>;
-    
+
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
         let index = self.0.alloc_name(v)?;
         self.0.keys.push(index);

@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use byteorder::WriteBytesExt;
 use serde::ser::Impossible;
 
@@ -6,7 +8,7 @@ use crate::value::{
         Error,
         buffer::{Buffer, BufferValue},
     },
-    util::{get_uint_n, write_partial_uint},
+    util::get_uint_n,
 };
 
 pub struct RefTypeSerializer<'a> {
@@ -36,7 +38,7 @@ impl<'a> serde::Serializer for RefTypeSerializer<'a> {
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         let n = get_uint_n(v as _);
         self.buf.bytes.write_u8(self.ty + n)?;
-        write_partial_uint(&mut self.buf.bytes, v as _, n)?;
+        self.buf.bytes.write_all(&v.to_le_bytes()[..n as usize])?;
         self.buf.values.push(BufferValue::Value(1 + n as usize));
 
         Ok(self.buf)

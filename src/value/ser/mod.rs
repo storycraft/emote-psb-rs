@@ -6,6 +6,8 @@ mod value;
 
 pub mod buffer;
 
+use std::io::Write;
+
 pub use error::Error;
 use serde::ser::SerializeSeq;
 
@@ -25,7 +27,7 @@ use crate::value::{
         special::SpecialValueSerializer,
         value::{ref_type::RefTypeSerializer, unit::UnitTypeSerializer},
     },
-    util::{get_n, get_uint_n, write_partial_int, write_partial_uint},
+    util::{get_n, get_uint_n},
 };
 
 pub struct Serializer<'a>(&'a mut Buffer);
@@ -79,7 +81,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
 
         let n = get_n(v);
         self.0.bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
-        write_partial_int(&mut self.0.bytes, v, n)?;
+        self.0.bytes.write_all(&v.to_le_bytes()[..n as usize])?;
         self.0.values.push(BufferValue::Value(1 + n as usize));
         Ok(self.0)
     }
@@ -105,7 +107,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
 
         let n = get_uint_n(v);
         self.0.bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
-        write_partial_uint(&mut self.0.bytes, v, n)?;
+        self.0.bytes.write_all(&v.to_le_bytes()[..n as usize])?;
         self.0.values.push(BufferValue::Value(1 + n as usize));
         Ok(self.0)
     }
@@ -139,7 +141,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
         let n = get_uint_n(index as _);
 
         self.0.bytes.write_u8(PSB_TYPE_STRING_N + n)?;
-        write_partial_int(&mut self.0.bytes, index as _, n)?;
+        self.0.bytes.write_all(&index.to_le_bytes()[..n as usize])?;
         self.0.values.push(BufferValue::Value(1 + n as usize));
         Ok(self.0)
     }
@@ -207,7 +209,6 @@ impl<'a> serde::Serializer for Serializer<'a> {
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        self.0.values.push(BufferValue::Invalid);
         Ok(SeqSerializer::new(self.0))
     }
 
@@ -234,7 +235,6 @@ impl<'a> serde::Serializer for Serializer<'a> {
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        self.0.values.push(BufferValue::Invalid);
         Ok(MapSerializer::new(self.0))
     }
 

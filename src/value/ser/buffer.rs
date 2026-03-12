@@ -1,10 +1,9 @@
 use std::io::{self, ErrorKind, Write};
 
-use byteorder::WriteBytesExt;
 use indexmap::{IndexSet, set::Slice};
 use smol_str::SmolStr;
 
-use crate::value::{PSB_TYPE_LIST, PSB_TYPE_OBJECT, ser::Error};
+use crate::value::ser::Error;
 
 #[derive(Debug, Clone)]
 /// Intermediate psb value serialization buffer
@@ -12,8 +11,12 @@ pub struct Buffer {
     names: IndexSet<SmolStr>,
     strings: IndexSet<SmolStr>,
     pub(crate) bytes: Vec<u8>,
-    pub(crate) keys: Vec<u32>,
     pub(crate) values: Vec<BufferValue>,
+    pub(crate) objects: Vec<BufferObject>,
+
+    // temporary buffers for list, map header
+    pub(crate) keys: Vec<u32>,
+    pub(crate) offsets: Vec<u64>,
 }
 
 impl Buffer {
@@ -22,8 +25,10 @@ impl Buffer {
             names: IndexSet::new(),
             strings: IndexSet::new(),
             bytes: vec![],
-            keys: vec![],
             values: vec![],
+            objects: vec![],
+            keys: vec![],
+            offsets: vec![],
         }
     }
 
@@ -38,39 +43,51 @@ impl Buffer {
     /// Clear buffer for reuse
     pub fn clear(&mut self) {
         self.bytes.clear();
-        self.keys.clear();
         self.values.clear();
+        self.objects.clear();
         self.names.clear();
         self.strings.clear();
     }
 
     #[inline]
-    pub fn write(&self, io: &mut impl Write) -> io::Result<()> {
-        self.write_inner(0, 0, io)?;
+    pub fn write(&self, stream: &mut impl Write) -> io::Result<()> {
+        self.write_inner(0, 0, stream)?;
         Ok(())
     }
 
-    fn write_inner(&self, index: usize, data_start: usize, io: &mut impl Write) -> io::Result<u64> {
-        let Some(&current) = self.values.get(index) else {
-            return Ok(0);
+    fn write_inner(
+        &self,
+        value_index: usize,
+        data_start: usize,
+        stream: &mut impl Write,
+    ) -> io::Result<(usize, usize)> {
+        let Some(&current) = self.values.get(value_index) else {
+            return Ok((0, 0));
         };
 
         match current {
             BufferValue::Invalid => Err(ErrorKind::InvalidData.into()),
             BufferValue::Value(size) => {
-                io.write_all(&self.bytes[data_start..][..size as usize])?;
-                Ok(size)
+                stream.write_all(&self.bytes[data_start..][..size])?;
+                Ok((size, 1))
             }
-            BufferValue::List { len } => {
-                io.write_u8(PSB_TYPE_LIST)?;
+            BufferValue::Object { index } => {
+                let object = self.objects[index];
+                stream.write_all(&self.bytes[object.header_start..][..object.header_size])?;
 
-                todo!()
+                let mut value_offset = 1;
+                let mut data_offset = 0;
+                for _ in 0..object.len {
+                    let item_index = value_index + value_offset;
+                    let item_offset = data_start + data_offset;
+                    let (written, values_read) =
+                        self.write_inner(item_index, item_offset, stream)?;
+
+                    data_offset += written;
+                    value_offset += values_read;
+                }
+                Ok((data_offset + object.header_size, value_offset))
             }
-            BufferValue::Map { key_start, len } => {
-                io.write_u8(PSB_TYPE_OBJECT)?;
-
-                todo!()
-            },
         }
     }
 
@@ -95,6 +112,25 @@ impl Default for Buffer {
 pub(crate) enum BufferValue {
     Invalid,
     Value(usize),
-    List { size: usize, len: usize },
-    Map { size: usize, key_start: usize, len: usize },
+    Object { index: usize },
+}
+
+impl BufferValue {
+    pub fn size(self, buf: &Buffer) -> usize {
+        match self {
+            BufferValue::Invalid => 0,
+            BufferValue::Value(size) => size,
+            BufferValue::Object { index } => {
+                let obj = buf.objects[index];
+                obj.header_start + obj.header_size
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BufferObject {
+    pub len: usize,
+    pub header_start: usize,
+    pub header_size: usize,
 }

@@ -1,7 +1,10 @@
 use byteorder::WriteBytesExt;
 use serde::ser::Impossible;
 
-use crate::value::ser::{Error, buffer::{Buffer, BufferValue}};
+use crate::value::ser::{
+    Error,
+    buffer::{Buffer, BufferValue},
+};
 
 pub struct UnitTypeSerializer<'a> {
     marker: &'static str,
