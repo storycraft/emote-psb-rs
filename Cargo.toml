@@ -16,3 +16,5 @@ derive_more = { version = "2.1.1", features = ["from"] }
 flate2 = "1.1.9"
 byteorder = "1.5.0"
 scopeguard = "1.2.0"
+indexmap = "2.13.0"
+smol_str = "0.3.6"

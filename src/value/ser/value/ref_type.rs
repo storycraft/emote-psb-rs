@@ -1,43 +1,45 @@
-use std::io::Write;
-
 use byteorder::WriteBytesExt;
 use serde::ser::Impossible;
 
 use crate::value::{
-    ser::{Error, Serializer},
+    ser::{
+        Error,
+        buffer::{Buffer, BufferValue},
+    },
     util::{get_uint_n, write_partial_uint},
 };
 
-pub struct RefTypeSerializer<'a, T> {
+pub struct RefTypeSerializer<'a> {
     marker: &'static str,
     ty: u8,
-    inner: &'a mut Serializer<T>,
+    buf: &'a mut Buffer,
 }
 
-impl<'a, T> RefTypeSerializer<'a, T> {
-    pub const fn new(marker: &'static str, ty: u8, inner: &'a mut Serializer<T>) -> Self {
-        Self { marker, ty, inner }
+impl<'a> RefTypeSerializer<'a> {
+    pub const fn new(marker: &'static str, ty: u8, buf: &'a mut Buffer) -> Self {
+        Self { marker, ty, buf }
     }
 }
 
-impl<T: Write> serde::Serializer for RefTypeSerializer<'_, T> {
-    type Ok = u64;
+impl<'a> serde::Serializer for RefTypeSerializer<'a> {
+    type Ok = &'a mut Buffer;
     type Error = Error;
 
-    type SerializeSeq = Impossible<u64, Error>;
-    type SerializeTuple = Impossible<u64, Error>;
-    type SerializeTupleStruct = Impossible<u64, Error>;
-    type SerializeTupleVariant = Impossible<u64, Error>;
-    type SerializeMap = Impossible<u64, Error>;
-    type SerializeStruct = Impossible<u64, Error>;
-    type SerializeStructVariant = Impossible<u64, Error>;
+    type SerializeSeq = Impossible<&'a mut Buffer, Error>;
+    type SerializeTuple = Impossible<&'a mut Buffer, Error>;
+    type SerializeTupleStruct = Impossible<&'a mut Buffer, Error>;
+    type SerializeTupleVariant = Impossible<&'a mut Buffer, Error>;
+    type SerializeMap = Impossible<&'a mut Buffer, Error>;
+    type SerializeStruct = Impossible<&'a mut Buffer, Error>;
+    type SerializeStructVariant = Impossible<&'a mut Buffer, Error>;
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         let n = get_uint_n(v as _);
-        self.inner.stream.write_u8(self.ty + n)?;
-        write_partial_uint(&mut self.inner.stream, v as _, n)?;
+        self.buf.bytes.write_u8(self.ty + n)?;
+        write_partial_uint(&mut self.buf.bytes, v as _, n)?;
+        self.buf.values.push(BufferValue::Value(1 + n as u64));
 
-        Ok(1 + n as u64)
+        Ok(self.buf)
     }
 
     fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {

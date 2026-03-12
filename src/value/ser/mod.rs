@@ -4,9 +4,10 @@ mod seq;
 mod special;
 mod value;
 
-pub use error::Error;
+pub mod buffer;
 
-use std::io::{Seek, Write};
+pub use error::Error;
+use serde::ser::SerializeSeq;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
@@ -14,10 +15,11 @@ use crate::value::{
     PSB_COMPILER_ARRAY, PSB_COMPILER_BINARY_TREE, PSB_COMPILER_BOOL, PSB_COMPILER_DECIMAL,
     PSB_COMPILER_INTEGER, PSB_COMPILER_RESOURCE, PSB_COMPILER_STRING, PSB_TYPE_DOUBLE,
     PSB_TYPE_EXTRA_N, PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0, PSB_TYPE_INTEGER_N,
-    PSB_TYPE_NULL, PSB_TYPE_RESOURCE_N, PSB_TYPE_TRUE, PsbCompilerArray, PsbCompilerBinaryTree,
-    PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber, PsbCompilerResource, PsbCompilerString,
-    PsbExtraResource, PsbResource, PsbUIntArray,
+    PSB_TYPE_NULL, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE, PsbCompilerArray,
+    PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
+    PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource, PsbUIntArray,
     ser::{
+        buffer::{Buffer, BufferValue},
         map::{MapSerializer, StructSerializer},
         seq::SeqSerializer,
         special::SpecialValueSerializer,
@@ -26,35 +28,34 @@ use crate::value::{
     util::{get_n, get_uint_n, write_partial_int, write_partial_uint},
 };
 
-pub struct Serializer<T> {
-    stream: T,
-    names_buf: Vec<u64>,
-    offsets_buf: Vec<u64>,
+pub struct Serializer<'a>(&'a mut Buffer);
+
+impl<'a> Serializer<'a> {
+    #[inline]
+    pub const fn new(buffer: &'a mut Buffer) -> Self {
+        Self(buffer)
+    }
 }
 
-impl<'a, T> serde::Serializer for &'a mut Serializer<T>
-where
-    T: Write + Seek,
-{
-    type Ok = u64;
+impl<'a> serde::Serializer for Serializer<'a> {
+    type Ok = &'a mut Buffer;
     type Error = Error;
 
-    type SerializeSeq = SeqSerializer<'a, T>;
-    type SerializeTuple = SeqSerializer<'a, T>;
-    type SerializeTupleStruct = SeqSerializer<'a, T>;
-    type SerializeTupleVariant = SeqSerializer<'a, T>;
-    type SerializeMap = MapSerializer<'a, T>;
-    type SerializeStruct = StructSerializer<'a, T>;
-    type SerializeStructVariant = MapSerializer<'a, T>;
+    type SerializeSeq = SeqSerializer<'a>;
+    type SerializeTuple = SeqSerializer<'a>;
+    type SerializeTupleStruct = SeqSerializer<'a>;
+    type SerializeTupleVariant = SeqSerializer<'a>;
+    type SerializeMap = MapSerializer<'a>;
+    type SerializeStruct = StructSerializer<'a>;
+    type SerializeStructVariant = MapSerializer<'a>;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        if v {
-            self.stream.write_u8(PSB_TYPE_TRUE)?;
-        } else {
-            self.stream.write_u8(PSB_TYPE_FALSE)?;
-        }
+        self.0
+            .bytes
+            .write_u8(if v { PSB_TYPE_TRUE } else { PSB_TYPE_FALSE })?;
+        self.0.values.push(BufferValue::Value(1));
 
-        Ok(1)
+        Ok(self.0)
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
@@ -71,14 +72,16 @@ where
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
         if v == 0 {
-            self.stream.write_u8(PSB_TYPE_INTEGER_N)?;
-            return Ok(1);
+            self.0.bytes.write_u8(PSB_TYPE_INTEGER_N)?;
+            self.0.values.push(BufferValue::Value(1));
+            return Ok(self.0);
         }
 
         let n = get_n(v);
-        self.stream.write_u8(PSB_TYPE_INTEGER_N + n)?;
-        write_partial_int(&mut self.stream, v, n)?;
-        Ok(1 + n as u64)
+        self.0.bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
+        write_partial_int(&mut self.0.bytes, v, n)?;
+        self.0.values.push(BufferValue::Value(1 + n as u64));
+        Ok(self.0)
     }
 
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
@@ -95,31 +98,36 @@ where
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
         if v == 0 {
-            self.stream.write_u8(PSB_TYPE_INTEGER_N)?;
-            return Ok(1);
+            self.0.bytes.write_u8(PSB_TYPE_INTEGER_N)?;
+            self.0.values.push(BufferValue::Value(1));
+            return Ok(self.0);
         }
 
         let n = get_uint_n(v);
-        self.stream.write_u8(PSB_TYPE_INTEGER_N + n)?;
-        write_partial_uint(&mut self.stream, v, n)?;
-        Ok(1 + n as u64)
+        self.0.bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
+        write_partial_uint(&mut self.0.bytes, v, n)?;
+        self.0.values.push(BufferValue::Value(1 + n as u64));
+        Ok(self.0)
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
         if v == 0.0 {
-            self.stream.write_u8(PSB_TYPE_FLOAT0)?;
-            return Ok(1);
+            self.0.bytes.write_u8(PSB_TYPE_FLOAT0)?;
+            self.0.values.push(BufferValue::Value(1));
+            return Ok(self.0);
         }
 
-        self.stream.write_u8(PSB_TYPE_FLOAT)?;
-        self.stream.write_f32::<LittleEndian>(v)?;
-        Ok(5)
+        self.0.bytes.write_u8(PSB_TYPE_FLOAT)?;
+        self.0.bytes.write_f32::<LittleEndian>(v)?;
+        self.0.values.push(BufferValue::Value(5));
+        Ok(self.0)
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        self.stream.write_u8(PSB_TYPE_DOUBLE)?;
-        self.stream.write_f64::<LittleEndian>(v)?;
-        Ok(9)
+        self.0.bytes.write_u8(PSB_TYPE_DOUBLE)?;
+        self.0.bytes.write_f64::<LittleEndian>(v)?;
+        self.0.values.push(BufferValue::Value(9));
+        Ok(self.0)
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
@@ -127,11 +135,21 @@ where
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        let index = self.0.alloc_string(v)?;
+        let n = get_uint_n(index as _);
+
+        self.0.bytes.write_u8(PSB_TYPE_STRING_N + n)?;
+        write_partial_int(&mut self.0.bytes, index as _, n)?;
+        self.0.values.push(BufferValue::Value(1 + n as u64));
+        Ok(self.0)
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        let mut seq = self.serialize_seq(Some(v.len()))?;
+        for b in v {
+            seq.serialize_element(b)?;
+        }
+        seq.end()
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
@@ -146,8 +164,9 @@ where
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        self.stream.write_u8(PSB_TYPE_NULL)?;
-        Ok(1)
+        self.0.bytes.write_u8(PSB_TYPE_NULL)?;
+        self.0.values.push(BufferValue::Value(1));
+        Ok(self.0)
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
@@ -188,7 +207,8 @@ where
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        Ok(SeqSerializer(self))
+        self.0.values.push(BufferValue::Invalid);
+        Ok(SeqSerializer::new(self.0))
     }
 
     fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
@@ -214,8 +234,8 @@ where
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        // TODO
-        Ok(MapSerializer(self))
+        self.0.values.push(BufferValue::Invalid);
+        Ok(MapSerializer::new(self.0))
     }
 
     fn serialize_struct(
@@ -230,52 +250,52 @@ where
 
             PsbResource::MARKER => Ok(StructSerializer::RefTy(SpecialValueSerializer::new(
                 name,
-                RefTypeSerializer::new(name, PSB_TYPE_RESOURCE_N, self),
+                RefTypeSerializer::new(name, PSB_TYPE_RESOURCE_N, self.0),
             ))),
 
             PsbExtraResource::MARKER => Ok(StructSerializer::RefTy(SpecialValueSerializer::new(
                 name,
-                RefTypeSerializer::new(name, PSB_TYPE_EXTRA_N, self),
+                RefTypeSerializer::new(name, PSB_TYPE_EXTRA_N, self.0),
             ))),
 
             PsbCompilerNumber::MARKER => Ok(StructSerializer::UnitTy(SpecialValueSerializer::new(
                 name,
-                UnitTypeSerializer::new(name, PSB_COMPILER_INTEGER, self),
+                UnitTypeSerializer::new(name, PSB_COMPILER_INTEGER, self.0),
             ))),
 
             PsbCompilerString::MARKER => Ok(StructSerializer::UnitTy(SpecialValueSerializer::new(
                 name,
-                UnitTypeSerializer::new(name, PSB_COMPILER_STRING, self),
+                UnitTypeSerializer::new(name, PSB_COMPILER_STRING, self.0),
             ))),
 
             PsbCompilerResource::MARKER => {
                 Ok(StructSerializer::UnitTy(SpecialValueSerializer::new(
                     name,
-                    UnitTypeSerializer::new(name, PSB_COMPILER_RESOURCE, self),
+                    UnitTypeSerializer::new(name, PSB_COMPILER_RESOURCE, self.0),
                 )))
             }
 
             PsbCompilerArray::MARKER => Ok(StructSerializer::UnitTy(SpecialValueSerializer::new(
                 name,
-                UnitTypeSerializer::new(name, PSB_COMPILER_ARRAY, self),
+                UnitTypeSerializer::new(name, PSB_COMPILER_ARRAY, self.0),
             ))),
 
             PsbCompilerDecimal::MARKER => {
                 Ok(StructSerializer::UnitTy(SpecialValueSerializer::new(
                     name,
-                    UnitTypeSerializer::new(name, PSB_COMPILER_DECIMAL, self),
+                    UnitTypeSerializer::new(name, PSB_COMPILER_DECIMAL, self.0),
                 )))
             }
 
             PsbCompilerBool::MARKER => Ok(StructSerializer::UnitTy(SpecialValueSerializer::new(
                 name,
-                UnitTypeSerializer::new(name, PSB_COMPILER_BOOL, self),
+                UnitTypeSerializer::new(name, PSB_COMPILER_BOOL, self.0),
             ))),
 
             PsbCompilerBinaryTree::MARKER => {
                 Ok(StructSerializer::UnitTy(SpecialValueSerializer::new(
                     name,
-                    UnitTypeSerializer::new(name, PSB_COMPILER_BINARY_TREE, self),
+                    UnitTypeSerializer::new(name, PSB_COMPILER_BINARY_TREE, self.0),
                 )))
             }
 

@@ -1,37 +1,36 @@
-use std::io::Write;
-
 use byteorder::WriteBytesExt;
 use serde::ser::Impossible;
 
-use crate::value::ser::{Error, Serializer};
+use crate::value::ser::{Error, buffer::{Buffer, BufferValue}};
 
-pub struct UnitTypeSerializer<'a, T> {
+pub struct UnitTypeSerializer<'a> {
     marker: &'static str,
     ty: u8,
-    inner: &'a mut Serializer<T>,
+    buf: &'a mut Buffer,
 }
 
-impl<'a, T> UnitTypeSerializer<'a, T> {
-    pub const fn new(marker: &'static str, ty: u8, inner: &'a mut Serializer<T>) -> Self {
-        Self { marker, ty, inner }
+impl<'a> UnitTypeSerializer<'a> {
+    pub const fn new(marker: &'static str, ty: u8, buf: &'a mut Buffer) -> Self {
+        Self { marker, ty, buf }
     }
 }
 
-impl<T: Write> serde::Serializer for UnitTypeSerializer<'_, T> {
-    type Ok = u64;
+impl<'a> serde::Serializer for UnitTypeSerializer<'a> {
+    type Ok = &'a mut Buffer;
     type Error = Error;
 
-    type SerializeSeq = Impossible<u64, Error>;
-    type SerializeTuple = Impossible<u64, Error>;
-    type SerializeTupleStruct = Impossible<u64, Error>;
-    type SerializeTupleVariant = Impossible<u64, Error>;
-    type SerializeMap = Impossible<u64, Error>;
-    type SerializeStruct = Impossible<u64, Error>;
-    type SerializeStructVariant = Impossible<u64, Error>;
+    type SerializeSeq = Impossible<&'a mut Buffer, Error>;
+    type SerializeTuple = Impossible<&'a mut Buffer, Error>;
+    type SerializeTupleStruct = Impossible<&'a mut Buffer, Error>;
+    type SerializeTupleVariant = Impossible<&'a mut Buffer, Error>;
+    type SerializeMap = Impossible<&'a mut Buffer, Error>;
+    type SerializeStruct = Impossible<&'a mut Buffer, Error>;
+    type SerializeStructVariant = Impossible<&'a mut Buffer, Error>;
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        self.inner.stream.write_u8(self.ty)?;
-        Ok(1)
+        self.buf.bytes.write_u8(self.ty)?;
+        self.buf.values.push(BufferValue::Value(1));
+        Ok(self.buf)
     }
 
     fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {

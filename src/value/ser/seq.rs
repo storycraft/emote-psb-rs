@@ -1,34 +1,48 @@
-use std::io::{Seek, Write};
-
 use serde::ser::{SerializeSeq, SerializeTuple, SerializeTupleStruct, SerializeTupleVariant};
 
-use crate::value::ser::{Error, Serializer};
+use crate::value::ser::{
+    Error, Serializer,
+    buffer::{Buffer, BufferValue},
+};
 
-pub struct SeqSerializer<'a, T>(pub &'a mut Serializer<T>);
+pub struct SeqSerializer<'a> {
+    len: usize,
+    buf: &'a mut Buffer,
+}
 
-impl<T: Seek + Write> SerializeSeq for SeqSerializer<'_, T> {
-    type Ok = u64;
-    type Error = Error;
-
-    fn serialize_element<V>(&mut self, value: &V) -> Result<(), Self::Error>
-    where
-        V: ?Sized + serde::Serialize,
-    {
-        todo!()
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        todo!()
+impl<'a> SeqSerializer<'a> {
+    pub const fn new(buf: &'a mut Buffer) -> Self {
+        Self { len: 0, buf }
     }
 }
 
-impl<T: Seek + Write> SerializeTuple for SeqSerializer<'_, T> {
-    type Ok = u64;
+impl<'a> SerializeSeq for SeqSerializer<'a> {
+    type Ok = &'a mut Buffer;
     type Error = Error;
 
-    fn serialize_element<V>(&mut self, value: &V) -> Result<(), Self::Error>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        V: ?Sized + serde::Serialize,
+        T: ?Sized + serde::Serialize,
+    {
+        self.len += 1;
+        value.serialize(Serializer(self.buf))?;
+        Ok(())
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        let index = self.buf.values.len() - self.len;
+        self.buf.values[index] = BufferValue::List { len: self.len };
+        Ok(self.buf)
+    }
+}
+
+impl<'a> SerializeTuple for SeqSerializer<'a> {
+    type Ok = &'a mut Buffer;
+    type Error = Error;
+
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: ?Sized + serde::Serialize,
     {
         SerializeSeq::serialize_element(self, value)
     }
@@ -38,13 +52,13 @@ impl<T: Seek + Write> SerializeTuple for SeqSerializer<'_, T> {
     }
 }
 
-impl<T: Seek + Write> SerializeTupleStruct for SeqSerializer<'_, T> {
-    type Ok = u64;
+impl<'a> SerializeTupleStruct for SeqSerializer<'a> {
+    type Ok = &'a mut Buffer;
     type Error = Error;
 
-    fn serialize_field<V>(&mut self, value: &V) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        V: ?Sized + serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         SerializeSeq::serialize_element(self, value)
     }
@@ -54,13 +68,13 @@ impl<T: Seek + Write> SerializeTupleStruct for SeqSerializer<'_, T> {
     }
 }
 
-impl<T: Seek + Write> SerializeTupleVariant for SeqSerializer<'_, T> {
-    type Ok = u64;
+impl<'a> SerializeTupleVariant for SeqSerializer<'a> {
+    type Ok = &'a mut Buffer;
     type Error = Error;
 
-    fn serialize_field<V>(&mut self, value: &V) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        V: ?Sized + serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         SerializeSeq::serialize_element(self, value)
     }

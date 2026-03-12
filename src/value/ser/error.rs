@@ -8,6 +8,12 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] io::Error),
 
+    #[error("index exceed u32 limit")]
+    IndexOverflow,
+
+    #[error("only string key is valid for psb object")]
+    InvalidKey,
+
     #[error("invalid psb specific value. marker: {0}")]
     InvalidValue(&'static str),
 
