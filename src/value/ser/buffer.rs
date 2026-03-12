@@ -73,7 +73,9 @@ impl Buffer {
             }
             BufferValue::Object { index } => {
                 let object = self.objects[index];
-                stream.write_all(&self.bytes[object.header_start..][..object.header_size])?;
+                stream.write_all(
+                    &self.bytes[data_start + object.header_offset..][..object.header_size],
+                )?;
 
                 let mut value_offset = 1;
                 let mut data_offset = 0;
@@ -86,7 +88,9 @@ impl Buffer {
                     data_offset += written;
                     value_offset += values_read;
                 }
-                Ok((data_offset + object.header_size, value_offset))
+                debug_assert_eq!(data_offset, object.header_offset);
+
+                Ok((object.header_offset + object.header_size, value_offset))
             }
         }
     }
@@ -122,7 +126,7 @@ impl BufferValue {
             BufferValue::Value(size) => size,
             BufferValue::Object { index } => {
                 let obj = buf.objects[index];
-                obj.header_start + obj.header_size
+                obj.header_offset + obj.header_size
             }
         }
     }
@@ -131,6 +135,6 @@ impl BufferValue {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BufferObject {
     pub len: usize,
-    pub header_start: usize,
+    pub header_offset: usize,
     pub header_size: usize,
 }

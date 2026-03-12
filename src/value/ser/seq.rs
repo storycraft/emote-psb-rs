@@ -12,7 +12,9 @@ use crate::value::{
 
 pub struct SeqSerializer<'a> {
     len: usize,
+    next_offset: usize,
     list_index: usize,
+    data_start: usize,
     offset_start: usize,
     buf: &'a mut Buffer,
 }
@@ -21,10 +23,13 @@ impl<'a> SeqSerializer<'a> {
     pub fn new(buf: &'a mut Buffer) -> Self {
         let list_index = buf.values.len();
         buf.values.push(BufferValue::Invalid);
+        let data_start = buf.bytes.len();
         let offset_start = buf.offsets.len();
         Self {
             len: 0,
+            next_offset: 0,
             list_index,
+            data_start,
             offset_start,
             buf,
         }
@@ -43,9 +48,10 @@ impl<'a> SerializeSeq for SeqSerializer<'a> {
 
         let index = self.buf.values.len();
         value.serialize(Serializer(self.buf))?;
-        self.buf
-            .offsets
-            .push(self.buf.values[index].size(self.buf) as u64);
+
+        let offset = self.next_offset;
+        self.next_offset += self.buf.values[index].size(self.buf);
+        self.buf.offsets.push(offset as _);
         Ok(())
     }
 
@@ -53,6 +59,7 @@ impl<'a> SerializeSeq for SeqSerializer<'a> {
         let header_start = self.buf.bytes.len();
         self.buf.bytes.write_u8(PSB_TYPE_LIST)?;
         write_uint_array(&mut self.buf.bytes, &self.buf.offsets[self.offset_start..])?;
+        debug_assert_eq!(self.buf.offsets.len() - self.offset_start, self.len);
         let header_end = self.buf.bytes.len();
 
         self.buf.offsets.drain(self.offset_start..);
@@ -60,7 +67,7 @@ impl<'a> SerializeSeq for SeqSerializer<'a> {
         let index = self.buf.objects.len();
         self.buf.objects.push(BufferObject {
             len: self.len,
-            header_start,
+            header_offset: header_start - self.data_start,
             header_size: header_end - header_start,
         });
 
