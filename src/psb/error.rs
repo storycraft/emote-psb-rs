@@ -2,7 +2,7 @@ use std::io;
 
 use thiserror::Error;
 
-use crate::value::de;
+use crate::value::{de, ser};
 
 #[derive(Debug, Error)]
 pub enum PsbOpenError {
@@ -17,6 +17,15 @@ pub enum PsbOpenError {
 
     #[error("invalid resources")]
     Resources(#[source] de::Error),
+
+    #[error(transparent)]
+    Io(#[from] io::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum PsbWriteError {
+    #[error(transparent)]
+    Serialize(#[from] ser::Error),
 
     #[error(transparent)]
     Io(#[from] io::Error),

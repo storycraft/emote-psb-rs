@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PsbFile<T> {
     pub encrypted: bool,
     pub version: u16,
@@ -42,7 +42,7 @@ impl<T: BufRead + Seek> PsbFile<T> {
         let version = stream.read_u16::<LittleEndian>()?;
         let encrypted = stream.read_u16::<LittleEndian>()? != 0;
 
-        let _ = stream.read_u32::<LittleEndian>()?;
+        let _header_length = stream.read_u32::<LittleEndian>()?;
 
         let name_offset = stream.read_u32::<LittleEndian>()?;
 
