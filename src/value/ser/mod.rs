@@ -80,7 +80,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
         let n = get_n(v);
         self.0.bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
         write_partial_int(&mut self.0.bytes, v, n)?;
-        self.0.values.push(BufferValue::Value(1 + n as u64));
+        self.0.values.push(BufferValue::Value(1 + n as usize));
         Ok(self.0)
     }
 
@@ -106,7 +106,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
         let n = get_uint_n(v);
         self.0.bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
         write_partial_uint(&mut self.0.bytes, v, n)?;
-        self.0.values.push(BufferValue::Value(1 + n as u64));
+        self.0.values.push(BufferValue::Value(1 + n as usize));
         Ok(self.0)
     }
 
@@ -140,7 +140,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
 
         self.0.bytes.write_u8(PSB_TYPE_STRING_N + n)?;
         write_partial_int(&mut self.0.bytes, index as _, n)?;
-        self.0.values.push(BufferValue::Value(1 + n as u64));
+        self.0.values.push(BufferValue::Value(1 + n as usize));
         Ok(self.0)
     }
 

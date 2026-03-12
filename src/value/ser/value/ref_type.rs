@@ -37,7 +37,7 @@ impl<'a> serde::Serializer for RefTypeSerializer<'a> {
         let n = get_uint_n(v as _);
         self.buf.bytes.write_u8(self.ty + n)?;
         write_partial_uint(&mut self.buf.bytes, v as _, n)?;
-        self.buf.values.push(BufferValue::Value(1 + n as u64));
+        self.buf.values.push(BufferValue::Value(1 + n as usize));
 
         Ok(self.buf)
     }

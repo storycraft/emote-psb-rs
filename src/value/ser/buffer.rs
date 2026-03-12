@@ -1,7 +1,10 @@
+use std::io::{self, ErrorKind, Write};
+
+use byteorder::WriteBytesExt;
 use indexmap::{IndexSet, set::Slice};
 use smol_str::SmolStr;
 
-use crate::value::ser::Error;
+use crate::value::{PSB_TYPE_LIST, PSB_TYPE_OBJECT, ser::Error};
 
 #[derive(Debug, Clone)]
 /// Intermediate psb value serialization buffer
@@ -41,6 +44,36 @@ impl Buffer {
         self.strings.clear();
     }
 
+    #[inline]
+    pub fn write(&self, io: &mut impl Write) -> io::Result<()> {
+        self.write_inner(0, 0, io)?;
+        Ok(())
+    }
+
+    fn write_inner(&self, index: usize, data_start: usize, io: &mut impl Write) -> io::Result<u64> {
+        let Some(&current) = self.values.get(index) else {
+            return Ok(0);
+        };
+
+        match current {
+            BufferValue::Invalid => Err(ErrorKind::InvalidData.into()),
+            BufferValue::Value(size) => {
+                io.write_all(&self.bytes[data_start..][..size as usize])?;
+                Ok(size)
+            }
+            BufferValue::List { len } => {
+                io.write_u8(PSB_TYPE_LIST)?;
+
+                todo!()
+            }
+            BufferValue::Map { key_start, len } => {
+                io.write_u8(PSB_TYPE_OBJECT)?;
+
+                todo!()
+            },
+        }
+    }
+
     pub(crate) fn alloc_name(&mut self, string: &str) -> Result<u32, Error> {
         let (index, _) = self.names.insert_full(string.into());
         index.try_into().map_err(|_| Error::IndexOverflow)
@@ -58,10 +91,10 @@ impl Default for Buffer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum BufferValue {
     Invalid,
-    Value(u64),
-    List { len: usize },
-    Map { key_start: usize, len: usize },
+    Value(usize),
+    List { size: usize, len: usize },
+    Map { size: usize, key_start: usize, len: usize },
 }
