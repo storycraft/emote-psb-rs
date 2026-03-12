@@ -76,9 +76,9 @@ impl<'a> SerializeSeq for SeqSerializer<'a> {
     }
 }
 
-impl<'a> SerializeTuple for SeqSerializer<'a> {
-    type Ok = &'a mut Buffer;
-    type Error = Error;
+impl SerializeTuple for SeqSerializer<'_> {
+    type Ok = <Self as SerializeSeq>::Ok;
+    type Error = <Self as SerializeSeq>::Error;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -92,9 +92,9 @@ impl<'a> SerializeTuple for SeqSerializer<'a> {
     }
 }
 
-impl<'a> SerializeTupleStruct for SeqSerializer<'a> {
-    type Ok = &'a mut Buffer;
-    type Error = Error;
+impl SerializeTupleStruct for SeqSerializer<'_> {
+    type Ok = <Self as SerializeSeq>::Ok;
+    type Error = <Self as SerializeSeq>::Error;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -108,9 +108,9 @@ impl<'a> SerializeTupleStruct for SeqSerializer<'a> {
     }
 }
 
-impl<'a> SerializeTupleVariant for SeqSerializer<'a> {
-    type Ok = &'a mut Buffer;
-    type Error = Error;
+impl SerializeTupleVariant for SeqSerializer<'_> {
+    type Ok = <Self as SerializeSeq>::Ok;
+    type Error = <Self as SerializeSeq>::Error;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where

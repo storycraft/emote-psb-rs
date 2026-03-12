@@ -11,7 +11,7 @@ pub enum Error {
     #[error("index exceed u32 limit")]
     IndexOverflow,
 
-    #[error("only string key is valid for psb object")]
+    #[error("invalid key for psb object")]
     InvalidKey,
 
     #[error("invalid psb specific value. marker: {0}")]

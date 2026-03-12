@@ -121,17 +121,15 @@ impl<'a> SerializeMap for MapSerializer<'a> {
     }
 }
 
-impl<'a> SerializeStruct for MapSerializer<'a> {
-    type Ok = &'a mut Buffer;
-    type Error = Error;
+impl SerializeStruct for MapSerializer<'_> {
+    type Ok = <Self as SerializeMap>::Ok;
+    type Error = <Self as SerializeMap>::Error;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + serde::Serialize,
     {
-        self.serialize_key(key)?;
-        self.serialize_value(value)?;
-        Ok(())
+        SerializeMap::serialize_entry(self, key, value)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -139,19 +137,19 @@ impl<'a> SerializeStruct for MapSerializer<'a> {
     }
 }
 
-impl<'a> SerializeStructVariant for MapSerializer<'a> {
-    type Ok = &'a mut Buffer;
-    type Error = Error;
+impl SerializeStructVariant for MapSerializer<'_> {
+    type Ok = <Self as SerializeMap>::Ok;
+    type Error = <Self as SerializeMap>::Error;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + serde::Serialize,
     {
-        serde::ser::SerializeStruct::serialize_field(self, key, value)
+        SerializeMap::serialize_entry(self, key, value)
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        serde::ser::SerializeStruct::end(self)
+        SerializeMap::end(self)
     }
 }
 
@@ -161,17 +159,19 @@ impl<'a> serde::Serializer for NameSerializer<'a> {
     type Ok = &'a mut Buffer;
     type Error = Error;
 
-    type SerializeSeq = Impossible<&'a mut Buffer, Error>;
-    type SerializeTuple = Impossible<&'a mut Buffer, Error>;
-    type SerializeTupleStruct = Impossible<&'a mut Buffer, Error>;
-    type SerializeTupleVariant = Impossible<&'a mut Buffer, Error>;
-    type SerializeMap = Impossible<&'a mut Buffer, Error>;
-    type SerializeStruct = Impossible<&'a mut Buffer, Error>;
-    type SerializeStructVariant = Impossible<&'a mut Buffer, Error>;
+    type SerializeSeq = Impossible<Self::Ok, Self::Error>;
+    type SerializeTuple = Impossible<Self::Ok, Self::Error>;
+    type SerializeTupleStruct = Impossible<Self::Ok, Self::Error>;
+    type SerializeTupleVariant = Impossible<Self::Ok, Self::Error>;
+    type SerializeMap = Impossible<Self::Ok, Self::Error>;
+    type SerializeStruct = Impossible<Self::Ok, Self::Error>;
+    type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        let index = self.0.alloc_name(v)?;
-        self.0.keys.push(index);
+        let index = self.0.names.get_index_of(v).ok_or(Error::InvalidKey)?;
+        self.0
+            .keys
+            .push(index.try_into().map_err(|_| Error::IndexOverflow)?);
         Ok(self.0)
     }
 
@@ -231,11 +231,11 @@ impl<'a> serde::Serializer for NameSerializer<'a> {
         Err(Error::InvalidKey)
     }
 
-    fn serialize_some<T>(self, _value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + serde::Serialize,
     {
-        Err(Error::InvalidKey)
+        value.serialize(self)
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
@@ -258,12 +258,12 @@ impl<'a> serde::Serializer for NameSerializer<'a> {
     fn serialize_newtype_struct<T>(
         self,
         _name: &'static str,
-        _value: &T,
+        value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + serde::Serialize,
     {
-        Err(Error::InvalidKey)
+        value.serialize(self)
     }
 
     fn serialize_newtype_variant<T>(
@@ -271,12 +271,12 @@ impl<'a> serde::Serializer for NameSerializer<'a> {
         _name: &'static str,
         _variant_index: u32,
         _variant: &'static str,
-        _value: &T,
+        value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + serde::Serialize,
     {
-        Err(Error::InvalidKey)
+        value.serialize(self)
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {

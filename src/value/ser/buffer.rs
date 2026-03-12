@@ -3,13 +3,11 @@ use std::io::{self, ErrorKind, Write};
 use indexmap::{IndexSet, set::Slice};
 use smol_str::SmolStr;
 
-use crate::value::ser::Error;
-
 #[derive(Debug, Clone)]
 /// Intermediate psb value serialization buffer
 pub struct Buffer {
-    names: IndexSet<SmolStr>,
-    strings: IndexSet<SmolStr>,
+    pub(crate) names: IndexSet<SmolStr>,
+    pub(crate) strings: IndexSet<SmolStr>,
     pub(crate) bytes: Vec<u8>,
     pub(crate) values: Vec<BufferValue>,
     pub(crate) objects: Vec<BufferObject>,
@@ -94,16 +92,6 @@ impl Buffer {
             }
         }
     }
-
-    pub(crate) fn alloc_name(&mut self, string: &str) -> Result<u32, Error> {
-        let (index, _) = self.names.insert_full(string.into());
-        index.try_into().map_err(|_| Error::IndexOverflow)
-    }
-
-    pub(crate) fn alloc_string(&mut self, string: &str) -> Result<u32, Error> {
-        let (index, _) = self.strings.insert_full(string.into());
-        index.try_into().map_err(|_| Error::IndexOverflow)
-    }
 }
 
 impl Default for Buffer {
@@ -113,7 +101,7 @@ impl Default for Buffer {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum BufferValue {
+pub enum BufferValue {
     Invalid,
     Value(usize),
     Object { index: usize },
@@ -133,7 +121,7 @@ impl BufferValue {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct BufferObject {
+pub struct BufferObject {
     pub len: usize,
     pub header_offset: usize,
     pub header_size: usize,

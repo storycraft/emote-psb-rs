@@ -1,15 +1,17 @@
+mod buffer;
 mod error;
 mod map;
 mod seq;
 mod special;
+mod string;
 mod value;
 
-pub mod buffer;
+pub use buffer::Buffer;
+pub use error::Error;
 
 use std::io::Write;
 
-pub use error::Error;
-use serde::ser::SerializeSeq;
+use serde::{Serialize, ser::SerializeSeq};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
@@ -21,23 +23,25 @@ use crate::value::{
     PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
     PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource,
     ser::{
-        buffer::{Buffer, BufferValue},
+        buffer::BufferValue,
         map::{MapSerializer, StructSerializer},
         seq::SeqSerializer,
         special::SpecialValueSerializer,
+        string::StringCollector,
         value::{ref_type::RefTypeSerializer, unit::UnitTypeSerializer},
     },
     util::{get_n, get_uint_n},
 };
 
-pub struct Serializer<'a>(&'a mut Buffer);
-
-impl<'a> Serializer<'a> {
-    #[inline]
-    pub const fn new(buffer: &'a mut Buffer) -> Self {
-        Self(buffer)
-    }
+pub fn serialize(value: &impl Serialize, buf: &mut Buffer) -> Result<(), Error> {
+    value.serialize(StringCollector(buf))?;
+    buf.names.sort();
+    buf.strings.sort();
+    value.serialize(Serializer(buf))?;
+    Ok(())
 }
+
+struct Serializer<'a>(&'a mut Buffer);
 
 impl<'a> serde::Serializer for Serializer<'a> {
     type Ok = &'a mut Buffer;
@@ -137,8 +141,11 @@ impl<'a> serde::Serializer for Serializer<'a> {
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        let index = self.0.alloc_string(v)?;
+        let index = self.0.strings.get_index_of(v).ok_or(Error::InvalidKey)?;
         let n = get_uint_n(index as _);
+        if n > 4 {
+            return Err(Error::IndexOverflow);
+        }
 
         self.0.bytes.write_u8(PSB_TYPE_STRING_N + n)?;
         self.0.bytes.write_all(&index.to_le_bytes()[..n as usize])?;
