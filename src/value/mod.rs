@@ -49,7 +49,7 @@ pub enum PsbValue {
     Null,
     Bool(bool),
     Number(PsbNumber),
-    String(String),
+    String(SmolStr),
 
     Resource(PsbResource),
     ExtraResource(PsbExtraResource),
