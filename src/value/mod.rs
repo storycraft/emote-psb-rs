@@ -53,7 +53,6 @@ pub enum PsbValue {
 
     Resource(PsbResource),
     ExtraResource(PsbExtraResource),
-    UIntArray(PsbUIntArray),
 
     List(Vec<PsbValue>),
     Object(HashMap<SmolStr, PsbValue>),
@@ -118,8 +117,6 @@ macro_rules! define_special_type {
         };
     };
 }
-
-define_special_type!(pub PsbUIntArray: Vec<u64> = "__PSB@UINT@ARRAY");
 
 define_special_type!(pub PsbResource: u32 = "__PSB@RESOURCE");
 define_special_type!(pub PsbExtraResource: u32 = "__PSB@EXTRA@RESOURCE");

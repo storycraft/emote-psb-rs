@@ -19,7 +19,7 @@ use crate::value::{
     PSB_TYPE_EXTRA_N, PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0, PSB_TYPE_INTEGER_N,
     PSB_TYPE_NULL, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE, PsbCompilerArray,
     PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
-    PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource, PsbUIntArray,
+    PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource,
     ser::{
         buffer::{Buffer, BufferValue},
         map::{MapSerializer, StructSerializer},
@@ -244,10 +244,6 @@ impl<'a> serde::Serializer for Serializer<'a> {
         len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
         match name {
-            PsbUIntArray::MARKER => {
-                todo!()
-            }
-
             PsbResource::MARKER => Ok(StructSerializer::RefTy(SpecialValueSerializer::new(
                 name,
                 RefTypeSerializer::new(name, PSB_TYPE_RESOURCE_N, self.0),

@@ -9,23 +9,19 @@ use core::ops::Range;
 use std::io::{BufRead, ErrorKind, Seek};
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use serde::{de::value::SeqAccessDeserializer, forward_to_deserialize_any};
+use serde::forward_to_deserialize_any;
 
 use crate::{
     psb::table::StringTable,
     value::{
         PSB_COMPILER_ARRAY, PSB_COMPILER_BINARY_TREE, PSB_COMPILER_BOOL, PSB_COMPILER_DECIMAL,
         PSB_COMPILER_INTEGER, PSB_COMPILER_RESOURCE, PSB_COMPILER_STRING, PSB_TYPE_DOUBLE,
-        PSB_TYPE_EXTRA_N, PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0,
-        PSB_TYPE_INTEGER_ARRAY_N, PSB_TYPE_INTEGER_N, PSB_TYPE_LIST, PSB_TYPE_NULL,
-        PSB_TYPE_OBJECT, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N, PSB_TYPE_TRUE, PsbCompilerArray,
-        PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
-        PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource, PsbUIntArray,
-        de::{
-            map::PsbObject,
-            seq::{List, UIntArray},
-            special::SpecialTypeDeserializer,
-        },
+        PSB_TYPE_EXTRA_N, PSB_TYPE_FALSE, PSB_TYPE_FLOAT, PSB_TYPE_FLOAT0, PSB_TYPE_INTEGER_N,
+        PSB_TYPE_LIST, PSB_TYPE_NULL, PSB_TYPE_OBJECT, PSB_TYPE_RESOURCE_N, PSB_TYPE_STRING_N,
+        PSB_TYPE_TRUE, PsbCompilerArray, PsbCompilerBinaryTree, PsbCompilerBool,
+        PsbCompilerDecimal, PsbCompilerNumber, PsbCompilerResource, PsbCompilerString,
+        PsbExtraResource, PsbResource,
+        de::{map::PsbObject, seq::List, special::SpecialTypeDeserializer},
         util::{read_partial_int, read_partial_uint, read_uint_array},
     },
 };
@@ -77,8 +73,6 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
         const PSB_TYPE_STRING_MAX: u8 = PSB_TYPE_STRING_N + 4;
         const PSB_TYPE_EXTRA_START: u8 = PSB_TYPE_EXTRA_N + 1;
         const PSB_TYPE_EXTRA_MAX: u8 = PSB_TYPE_EXTRA_N + 4;
-        const PSB_TYPE_INTEGER_ARRAY_START: u8 = PSB_TYPE_INTEGER_ARRAY_N + 1;
-        const PSB_TYPE_INTEGER_ARRAY_MAX: u8 = PSB_TYPE_INTEGER_ARRAY_N + 8;
 
         match self.stream.read_u8()? {
             PSB_TYPE_NULL => visitor.visit_unit(),
@@ -117,21 +111,6 @@ impl<T: BufRead + Seek> serde::Deserializer<'static> for &mut Deserializer<'_, T
                     .map_err(|_| Error::InvalidValue)?;
 
                 SpecialTypeDeserializer::new(PsbExtraResource::MARKER, idx).deserialize(visitor)
-            }
-
-            ty @ PSB_TYPE_INTEGER_ARRAY_START..=PSB_TYPE_INTEGER_ARRAY_MAX => {
-                let len = read_partial_uint(&mut self.stream, ty - PSB_TYPE_INTEGER_ARRAY_N)?;
-                let item_byte_size = self.stream.read_u8()? - PSB_TYPE_INTEGER_ARRAY_N;
-
-                SpecialTypeDeserializer::new(
-                    PsbUIntArray::MARKER,
-                    SeqAccessDeserializer::new(UIntArray::new(
-                        len as _,
-                        item_byte_size,
-                        &mut self.stream,
-                    )),
-                )
-                .deserialize(visitor)
             }
 
             PSB_TYPE_LIST => {

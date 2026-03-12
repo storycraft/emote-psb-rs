@@ -1,49 +1,9 @@
 use core::ops::Range;
 use std::io::{BufRead, Seek, SeekFrom};
 
-use serde::de::{IntoDeserializer, SeqAccess, value::U64Deserializer};
+use serde::de::SeqAccess;
 
-use crate::value::{
-    de::{Deserializer, error},
-    util::read_partial_uint,
-};
-
-pub struct UIntArray<'a, T> {
-    remaining: usize,
-    item_byte_size: u8,
-    stream: &'a mut T,
-}
-
-impl<'a, T> UIntArray<'a, T> {
-    pub const fn new(len: usize, item_byte_size: u8, stream: &'a mut T) -> Self {
-        Self {
-            remaining: len,
-            item_byte_size,
-            stream,
-        }
-    }
-}
-
-impl<'a, 'de, T> SeqAccess<'de> for UIntArray<'a, T>
-where
-    T: BufRead + Seek,
-{
-    type Error = error::Error;
-
-    fn next_element_seed<V>(&mut self, seed: V) -> Result<Option<V::Value>, Self::Error>
-    where
-        V: serde::de::DeserializeSeed<'de>,
-    {
-        if self.remaining == 0 {
-            return Ok(None);
-        }
-
-        self.remaining -= 1;
-        let read = read_partial_uint(self.stream, self.item_byte_size)?;
-        let de: U64Deserializer<error::Error> = read.into_deserializer();
-        Ok(Some(seed.deserialize(de)?))
-    }
-}
+use crate::value::de::{Deserializer, error};
 
 pub struct List<'a, 'b, T> {
     data_start: u64,
