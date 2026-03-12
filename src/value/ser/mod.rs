@@ -103,17 +103,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        if v == 0 {
-            self.0.bytes.write_u8(PSB_TYPE_INTEGER_N)?;
-            self.0.values.push(BufferValue::Value(1));
-            return Ok(self.0);
-        }
-
-        let n = get_uint_n(v);
-        self.0.bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
-        self.0.bytes.write_all(&v.to_le_bytes()[..n as usize])?;
-        self.0.values.push(BufferValue::Value(1 + n as usize));
-        Ok(self.0)
+        self.serialize_i64(i64::from_ne_bytes(v.to_ne_bytes()))
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {

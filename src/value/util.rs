@@ -76,24 +76,24 @@ pub fn read_partial_int(stream: &mut impl Read, size: u8) -> io::Result<i64> {
     }
 }
 
-pub fn get_n(number: i64) -> u8 {
-    get_uint_n(!number as u64)
+pub const fn get_n(v: i64) -> u8 {
+    get_uint_n(u64::from_ne_bytes(v.to_ne_bytes()) << 1)
 }
 
-pub fn get_uint_n(number: u64) -> u8 {
-    if number <= 0xff {
+pub const fn get_uint_n(v: u64) -> u8 {
+    if v <= 0xff {
         1
-    } else if number <= 0xffff {
+    } else if v <= 0xffff {
         2
-    } else if number <= 0xffffff {
+    } else if v <= 0xffffff {
         3
-    } else if number <= 0xffffffff {
+    } else if v <= 0xffffffff {
         4
-    } else if number <= 0xffffffffff {
+    } else if v <= 0xffffffffff {
         5
-    } else if number <= 0xffffffffffff {
+    } else if v <= 0xffffffffffff {
         6
-    } else if number <= 0xffffffffffffff {
+    } else if v <= 0xffffffffffffff {
         7
     } else {
         8
