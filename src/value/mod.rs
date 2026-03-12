@@ -7,6 +7,7 @@ pub(crate) mod util;
 use std::collections::HashMap;
 
 use number::PsbNumber;
+use smol_str::SmolStr;
 
 pub const PSB_TYPE_NULL: u8 = 0x01;
 
@@ -55,7 +56,7 @@ pub enum PsbValue {
     UIntArray(PsbUIntArray),
 
     List(Vec<PsbValue>),
-    Object(HashMap<String, PsbValue>),
+    Object(HashMap<SmolStr, PsbValue>),
 
     CompilerNumber(PsbCompilerNumber),
     CompilerString(PsbCompilerString),
