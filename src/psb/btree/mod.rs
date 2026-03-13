@@ -2,7 +2,7 @@ mod util;
 
 use std::{
     collections::{HashMap, hash_map},
-    io::{self, Read, Seek, Write},
+    io::{self, Read, Write},
 };
 
 use scopeguard::guard;
@@ -15,47 +15,47 @@ use crate::{
     },
 };
 
+pub fn read_btree(stream: &mut impl Read, buf: &mut Vec<u64>) -> Result<StringTable, de::Error> {
+    let offsets_start = buf.len();
+    let mut buf = guard(buf, |buf| {
+        buf.drain(offsets_start..);
+    });
+    read_uint_array(stream, *buf)?;
+    let tree_start = buf.len();
+    read_uint_array(stream, *buf)?;
+    let indexes_start = buf.len();
+    read_uint_array(stream, *buf)?;
+
+    let offsets = &buf[offsets_start..tree_start];
+    let tree = &buf[tree_start..indexes_start];
+    let indexes = &buf[indexes_start..];
+    let mut table = StringTable::with_capacity(buf.len() - indexes_start);
+    let mut name = vec![];
+    for &index in indexes {
+        let mut id = tree[index as usize];
+
+        while id != 0 {
+            // travel to child tree
+            let next = tree[id as usize];
+
+            // get values from offsets
+            let decoded = id - offsets[next as usize];
+
+            id = next;
+
+            name.push(decoded as u8);
+        }
+        name.reverse();
+        table.push_str(str::from_utf8(&name).map_err(|_| de::Error::InvalidValue)?);
+        name.clear();
+    }
+
+    Ok(table)
+}
+
 pub struct PsbBtree(pub StringTable);
 
 impl PsbBtree {
-    pub fn read(stream: &mut (impl Read + Seek), buf: &mut Vec<u64>) -> Result<Self, de::Error> {
-        let offsets_start = buf.len();
-        let mut buf = guard(buf, |buf| {
-            buf.drain(offsets_start..);
-        });
-        read_uint_array(stream, *buf)?;
-        let tree_start = buf.len();
-        read_uint_array(stream, *buf)?;
-        let indexes_start = buf.len();
-        read_uint_array(stream, *buf)?;
-
-        let offsets = &buf[offsets_start..tree_start];
-        let tree = &buf[tree_start..indexes_start];
-        let indexes = &buf[indexes_start..];
-        let mut table = StringTable::with_capacity(buf.len() - indexes_start);
-        let mut name = vec![];
-        for &index in indexes {
-            let mut id = tree[index as usize];
-
-            while id != 0 {
-                // travel to child tree
-                let next = tree[id as usize];
-
-                // get values from offsets
-                let decoded = id - offsets[next as usize];
-
-                id = next;
-
-                name.push(decoded as u8);
-            }
-            name.reverse();
-            table.push_str(str::from_utf8(&name).map_err(|_| de::Error::InvalidValue)?);
-            name.clear();
-        }
-
-        Ok(Self(table))
-    }
-
     pub fn write_tree(&self, stream: &mut impl Write) -> io::Result<()> {
         let mut root = self.build_tree();
 

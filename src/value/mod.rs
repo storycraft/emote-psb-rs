@@ -65,7 +65,8 @@ pub enum PsbValue {
 
     /// Map of values
     ///
-    /// The order needs to be preserved. Use data types which preserves order.
+    /// The order needs to be preserved.
+    /// Use data types which preserves order.
     Object(IndexMap<SmolStr, PsbValue>),
 
     /// PSB intrinsic type
