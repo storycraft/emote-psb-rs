@@ -53,7 +53,7 @@ pub enum PsbValue {
     /// A numberic value
     Number(PsbNumber),
     /// A string value
-    String(SmolStr),
+    String(String),
 
     /// A resource index
     Resource(PsbResource),
