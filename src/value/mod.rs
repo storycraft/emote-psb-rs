@@ -4,8 +4,7 @@ pub mod ser;
 
 pub(crate) mod util;
 
-use std::collections::HashMap;
-
+use indexmap::IndexMap;
 use number::PsbNumber;
 use smol_str::SmolStr;
 
@@ -45,30 +44,53 @@ pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
+/// Variants of psb data type
 pub enum PsbValue {
+    /// An empty or null type
     Null,
+    /// A bool value
     Bool(bool),
+    /// A numberic value
     Number(PsbNumber),
+    /// A string value
     String(SmolStr),
 
+    /// A resource index
     Resource(PsbResource),
+    /// A extra resource index
     ExtraResource(PsbExtraResource),
 
+    /// List of values
     List(Vec<PsbValue>),
-    Object(HashMap<SmolStr, PsbValue>),
 
+    /// Map of values
+    ///
+    /// The order needs to be preserved. Use data types which preserves order.
+    Object(IndexMap<SmolStr, PsbValue>),
+
+    /// PSB intrinsic type
     CompilerNumber(PsbCompilerNumber),
+    /// PSB intrinsic type
     CompilerString(PsbCompilerString),
+    /// PSB intrinsic type
     CompilerResource(PsbCompilerResource),
+    /// PSB intrinsic type
     CompilerDecimal(PsbCompilerDecimal),
+    /// PSB intrinsic type
     CompilerArray(PsbCompilerArray),
+    /// PSB intrinsic type
     CompilerBool(PsbCompilerBool),
+    /// PSB intrinsic type
     CompilerBinaryTree(PsbCompilerBinaryTree),
 }
 
 macro_rules! define_special_type {
-    ($vis:vis $name:ident $(: $val:ty)? = $marker:literal) => {
+    (
+        $(#[$meta:meta])*
+        $vis:vis $name:ident $(: $val:ty)? = $marker:literal
+    ) => {
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        $(#[$meta])*
         $vis struct $name $((pub $val))?;
 
         #[allow(unused_parens)]
@@ -118,13 +140,40 @@ macro_rules! define_special_type {
     };
 }
 
-define_special_type!(pub PsbResource: u32 = "__PSB@RESOURCE");
-define_special_type!(pub PsbExtraResource: u32 = "__PSB@EXTRA@RESOURCE");
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbResource: u32 = "__PSB@RESOURCE"
+);
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbExtraResource: u32 = "__PSB@EXTRA@RESOURCE"
+);
 
-define_special_type!(pub PsbCompilerNumber = "__PSB@CP@NUMBER");
-define_special_type!(pub PsbCompilerString = "__PSB@CP@STRING");
-define_special_type!(pub PsbCompilerResource = "__PSB@CP@RESOURCE");
-define_special_type!(pub PsbCompilerDecimal = "__PSB@CP@DECIMAL");
-define_special_type!(pub PsbCompilerArray = "__PSB@CP@ARRAY");
-define_special_type!(pub PsbCompilerBool = "__PSB@CP@BOOL");
-define_special_type!(pub PsbCompilerBinaryTree = "__PSB@CP@BTREE");
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbCompilerNumber = "__PSB@CP@NUMBER"
+);
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbCompilerString = "__PSB@CP@STRING"
+);
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbCompilerResource = "__PSB@CP@RESOURCE"
+);
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbCompilerDecimal = "__PSB@CP@DECIMAL"
+);
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbCompilerArray = "__PSB@CP@ARRAY"
+);
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbCompilerBool = "__PSB@CP@BOOL"
+);
+define_special_type!(
+    /// PSB intrinsic marker
+    pub PsbCompilerBinaryTree = "__PSB@CP@BTREE"
+);
