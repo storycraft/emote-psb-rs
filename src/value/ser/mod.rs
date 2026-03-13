@@ -205,7 +205,12 @@ impl<'a> serde::Serializer for Serializer<'a> {
         value.serialize(self)
     }
 
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        if let Some(len) = len {
+            self.0.values.reserve(len + 1);
+            self.0.offsets.reserve(len);
+        }
+
         Ok(SeqSerializer::new(self.0))
     }
 
@@ -231,7 +236,13 @@ impl<'a> serde::Serializer for Serializer<'a> {
         self.serialize_seq(Some(len))
     }
 
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        if let Some(len) = len {
+            self.0.values.reserve(len + 1);
+            self.0.keys.reserve(len);
+            self.0.offsets.reserve(len);
+        }
+
         Ok(MapSerializer::new(self.0))
     }
 
