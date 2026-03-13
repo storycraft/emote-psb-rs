@@ -1,15 +1,9 @@
 use core::ops::Range;
 use std::io::{BufRead, Seek, SeekFrom};
 
-use serde::{
-    de::{MapAccess, Visitor},
-    forward_to_deserialize_any,
-};
+use serde::de::{IntoDeserializer, MapAccess};
 
-use crate::{
-    psb::table::StringTable,
-    value::de::{Deserializer, Error, error},
-};
+use crate::value::de::{Deserializer, error};
 
 pub struct PsbObject<'a, 'b, T> {
     data_start: u64,
@@ -48,10 +42,13 @@ where
             return Ok(None);
         };
 
-        Ok(Some(seed.deserialize(NameDeserializer {
-            names: self.inner.names,
-            id: self.inner.buf[index] as _,
-        })?))
+        let name = self
+            .inner
+            .names
+            .get(self.inner.buf[index] as _)
+            .ok_or(error::Error::InvalidValue)?;
+
+        seed.deserialize(name.into_deserializer()).map(Some)
     }
 
     fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
@@ -64,29 +61,5 @@ where
             .stream
             .seek(SeekFrom::Start(self.data_start + offset))?;
         seed.deserialize(&mut *self.inner)
-    }
-}
-
-struct NameDeserializer<'a> {
-    names: &'a StringTable,
-    id: usize,
-}
-
-impl<'a> serde::Deserializer<'static> for NameDeserializer<'a> {
-    type Error = Error;
-
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'static>,
-    {
-        let name = self.names.get(self.id).ok_or(error::Error::InvalidValue)?;
-        visitor.visit_str(name)
-    }
-
-    forward_to_deserialize_any! {
-        <V: Visitor<'static>>
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
     }
 }
