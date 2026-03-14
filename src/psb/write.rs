@@ -1,4 +1,5 @@
-use std::io::{self, Seek, SeekFrom, Write};
+use core::fmt::{self, Debug};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 
 use adler2::Adler32;
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -17,15 +18,15 @@ use crate::{
 #[derive(Debug)]
 pub struct PsbWriter<T> {
     version: u16,
-    start: u64,
     offset_start: u64,
     header_length: u32,
-    name_offset: u32,
-    entrypoint: u32,
-    string_offsets_offset: u32,
-    string_data_offset: u32,
-    resources: Vec<()>,
-    stream: T,
+
+    offsets: Offsets,
+
+    resources: Resources,
+    extra: Resources,
+
+    stream: PsbStream<T>,
 }
 
 impl<T> PsbWriter<T>
@@ -47,9 +48,9 @@ where
         version: u16,
         encrypted: bool,
         buf: &mut Buffer,
-        mut stream: T,
+        stream: T,
     ) -> Result<Self, PsbWriteError> {
-        let start = stream.stream_position()?;
+        let mut stream = PsbStream::new(stream)?;
         stream.write_u32::<LittleEndian>(PSB_SIGNATURE)?;
         stream.write_u16::<LittleEndian>(version)?;
         stream.write_u16::<LittleEndian>(encrypted as _)?;
@@ -62,10 +63,10 @@ where
             stream.write_u8(0)?;
         }
 
-        let name_offset = (stream.stream_position()? - start) as u32;
+        let name_offset = stream.psb_position()?;
         write_names(&mut stream, buf.names().iter())?;
 
-        let entrypoint = (stream.stream_position()? - start) as u32;
+        let entrypoint = stream.psb_position()?;
         buf.write(&mut stream)?;
 
         let mut offsets = Vec::<u64>::with_capacity(buf.strings().len());
@@ -74,10 +75,10 @@ where
             offsets.push(offset);
             offset += string.len() as u64 + 1;
         }
-        let string_offsets_offset = (stream.stream_position()? - start) as u32;
+        let string_offsets_offset = stream.psb_position()?;
         write_uint_array(&mut stream, &offsets)?;
 
-        let string_data_offset = (stream.stream_position()? - start) as u32;
+        let string_data_offset = stream.psb_position()?;
         for string in buf.strings() {
             stream.write_all(string.as_bytes())?;
             stream.write_u8(0)?;
@@ -85,70 +86,235 @@ where
 
         Ok(Self {
             version,
-            start,
             offset_start,
             header_length,
-            name_offset,
-            entrypoint,
-            string_offsets_offset,
-            string_data_offset,
-            resources: vec![],
+            offsets: Offsets {
+                name: name_offset,
+                entrypoint,
+                string_offsets: string_offsets_offset,
+                string_data: string_data_offset,
+            },
+            resources: Resources::new(),
+            extra: Resources::new(),
             stream,
         })
     }
 
-    pub fn finish(mut self) -> io::Result<()> {
-        let resource_offsets_offset = (self.stream.stream_position()? - self.start) as u32;
-        write_uint_array(&mut self.stream, &[] as &[u64])?;
-        let resource_length_offset = (self.stream.stream_position()? - self.start) as u32;
-        write_uint_array(&mut self.stream, &[] as &[u64])?;
+    #[inline]
+    pub fn add_resource(&mut self, res: impl Read + Seek + 'static) -> io::Result<usize> {
+        self.resources.add(res)
+    }
 
-        let resource_data_offset = (self.stream.stream_position()? - self.start) as u32;
+    #[inline]
+    pub fn add_extra(&mut self, res: impl Read + Seek + 'static) -> io::Result<usize> {
+        self.extra.add(res)
+    }
+
+    pub fn finish(mut self) -> io::Result<()> {
+        let extra_offsets = if self.version > 3 {
+            let extra_offset = self.stream.psb_position()?;
+            self.extra.write_offsets(&mut self.stream)?;
+            let extra_length = self.stream.psb_position()?;
+            self.extra.write_lengths(&mut self.stream)?;
+            let extra_data = self.stream.psb_position()?;
+            self.extra.write_data(&mut self.stream)?;
+
+            Some((extra_offset, extra_length, extra_data))
+        } else {
+            None
+        };
+
+        let resource_offset = self.stream.psb_position()?;
+        self.resources.write_offsets(&mut self.stream)?;
+        let resource_length = self.stream.psb_position()?;
+        self.resources.write_lengths(&mut self.stream)?;
+        let resource_data = self.stream.psb_position()?;
+        self.resources.write_data(&mut self.stream)?;
 
         self.stream.seek(SeekFrom::Start(self.offset_start))?;
-        self.stream.write_u32::<LittleEndian>(self.name_offset)?;
-
-        self.stream
-            .write_u32::<LittleEndian>(self.string_offsets_offset)?;
-        self.stream
-            .write_u32::<LittleEndian>(self.string_data_offset)?;
-
-        self.stream
-            .write_u32::<LittleEndian>(resource_offsets_offset)?;
-        self.stream
-            .write_u32::<LittleEndian>(resource_length_offset)?;
-        self.stream
-            .write_u32::<LittleEndian>(resource_data_offset)?;
-
-        self.stream.write_u32::<LittleEndian>(self.entrypoint)?;
-        if self.version > 2 {
-            let mut adler = Adler32::new();
-            adler.write_slice(&self.header_length.to_le_bytes());
-            adler.write_slice(&self.name_offset.to_le_bytes());
-            adler.write_slice(&self.string_offsets_offset.to_le_bytes());
-            adler.write_slice(&self.string_data_offset.to_le_bytes());
-            adler.write_slice(&resource_offsets_offset.to_le_bytes());
-            adler.write_slice(&resource_length_offset.to_le_bytes());
-            adler.write_slice(&resource_data_offset.to_le_bytes());
-            adler.write_slice(&self.entrypoint.to_le_bytes());
-
-            self.stream.write_u32::<LittleEndian>(adler.checksum())?;
-        }
-
-        if self.version > 3 {
-            // TODO
-            self.stream
-                .write_u32::<LittleEndian>(resource_offsets_offset)?;
-            self.stream
-                .write_u32::<LittleEndian>(resource_length_offset)?;
-            self.stream
-                .write_u32::<LittleEndian>(resource_data_offset)?;
-        }
-
+        self.write_offsets(
+            resource_offset,
+            resource_length,
+            resource_data,
+            extra_offsets,
+        )?;
         self.stream.seek(SeekFrom::End(0))?;
         self.stream.flush()?;
         Ok(())
     }
+
+    fn write_offsets(
+        &mut self,
+        resource_offset: u32,
+        resource_length: u32,
+        resource_data: u32,
+        extra_offsets: Option<(u32, u32, u32)>,
+    ) -> io::Result<()> {
+        self.stream.write_u32::<LittleEndian>(self.offsets.name)?;
+
+        self.stream
+            .write_u32::<LittleEndian>(self.offsets.string_offsets)?;
+        self.stream
+            .write_u32::<LittleEndian>(self.offsets.string_data)?;
+
+        self.stream.write_u32::<LittleEndian>(resource_offset)?;
+        self.stream.write_u32::<LittleEndian>(resource_length)?;
+        self.stream.write_u32::<LittleEndian>(resource_data)?;
+
+        self.stream
+            .write_u32::<LittleEndian>(self.offsets.entrypoint)?;
+        if self.version > 2 {
+            self.stream
+                .write_u32::<LittleEndian>(self.calculate_checksum(
+                    resource_offset,
+                    resource_length,
+                    resource_data,
+                    extra_offsets,
+                ))?;
+        }
+
+        if let Some(extra) = extra_offsets {
+            self.stream.write_u32::<LittleEndian>(extra.0)?;
+            self.stream.write_u32::<LittleEndian>(extra.1)?;
+            self.stream.write_u32::<LittleEndian>(extra.2)?;
+        }
+
+        Ok(())
+    }
+
+    fn calculate_checksum(
+        &self,
+        resource_offset: u32,
+        resource_length: u32,
+        resource_data: u32,
+        extra_offsets: Option<(u32, u32, u32)>,
+    ) -> u32 {
+        let mut adler = Adler32::new();
+        adler.write_slice(&self.header_length.to_le_bytes());
+        adler.write_slice(&self.offsets.name.to_le_bytes());
+        adler.write_slice(&self.offsets.string_offsets.to_le_bytes());
+        adler.write_slice(&self.offsets.string_data.to_le_bytes());
+        adler.write_slice(&resource_offset.to_le_bytes());
+        adler.write_slice(&resource_length.to_le_bytes());
+        adler.write_slice(&resource_data.to_le_bytes());
+        adler.write_slice(&self.offsets.entrypoint.to_le_bytes());
+        if let Some(extra) = extra_offsets {
+            adler.write_slice(&extra.0.to_le_bytes());
+            adler.write_slice(&extra.1.to_le_bytes());
+            adler.write_slice(&extra.2.to_le_bytes());
+        }
+        adler.checksum()
+    }
+}
+
+#[derive(Debug)]
+struct PsbStream<T> {
+    start: u64,
+    inner: T,
+}
+
+impl<T> PsbStream<T>
+where
+    T: Write + Seek,
+{
+    pub fn new(mut stream: T) -> io::Result<Self> {
+        let start = stream.stream_position()?;
+        Ok(Self {
+            start,
+            inner: stream,
+        })
+    }
+
+    pub fn psb_position(&mut self) -> io::Result<u32> {
+        Ok((self.inner.stream_position()? - self.start) as u32)
+    }
+}
+
+impl<T: Write> Write for PsbStream<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+impl<T: Seek> Seek for PsbStream<T> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.inner.seek(pos)
+    }
+}
+
+#[derive(Debug)]
+struct Resources {
+    offsets: Vec<u64>,
+    lengths: Vec<u64>,
+    streams: Vec<Resource>,
+}
+
+impl Resources {
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            offsets: vec![],
+            lengths: vec![],
+            streams: vec![],
+        }
+    }
+
+    pub fn add(&mut self, mut res: impl Read + Seek + 'static) -> io::Result<usize> {
+        let cur = res.stream_position()?;
+        let end = res.seek(SeekFrom::End(0))?;
+        res.seek(SeekFrom::Start(cur))?;
+        let size = end - cur;
+
+        let id = self.offsets.len();
+        self.offsets.push({
+            let last_offset = self.offsets.last().copied().unwrap_or_default();
+            let last_size = self.lengths.last().copied().unwrap_or_default();
+
+            last_offset + last_size
+        });
+        self.lengths.push(size);
+        self.streams.push(Resource(Box::new(res)));
+
+        Ok(id)
+    }
+
+    pub fn write_offsets(&self, stream: &mut impl Write) -> io::Result<()> {
+        write_uint_array(stream, &self.offsets)?;
+        Ok(())
+    }
+
+    pub fn write_lengths(&self, stream: &mut impl Write) -> io::Result<()> {
+        write_uint_array(stream, &self.lengths)?;
+        Ok(())
+    }
+
+    pub fn write_data(&mut self, stream: &mut impl Write) -> io::Result<()> {
+        for Resource(data) in &mut self.streams {
+            io::copy(data, stream)?;
+        }
+        Ok(())
+    }
+}
+
+#[repr(transparent)]
+struct Resource(Box<dyn Read>);
+
+impl Debug for Resource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Resource").finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
+struct Offsets {
+    name: u32,
+    entrypoint: u32,
+    string_offsets: u32,
+    string_data: u32,
 }
 
 const fn header_length(version: u16) -> u32 {
