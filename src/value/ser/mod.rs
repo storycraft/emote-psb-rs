@@ -35,8 +35,8 @@ use crate::value::{
 
 pub fn serialize(value: &impl Serialize, buf: &mut Buffer) -> Result<(), Error> {
     value.serialize(StringCollector(buf))?;
-    buf.names.sort();
-    buf.strings.sort();
+    buf.names.sort_unstable();
+    buf.strings.sort_unstable();
     value.serialize(Serializer(buf))?;
     Ok(())
 }
