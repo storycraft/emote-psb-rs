@@ -16,20 +16,20 @@ impl<'a> UnitTypeSerializer<'a> {
 }
 
 impl<'a> serde::Serializer for UnitTypeSerializer<'a> {
-    type Ok = &'a mut Buffer;
+    type Ok = ();
     type Error = Error;
 
-    type SerializeSeq = Impossible<&'a mut Buffer, Error>;
-    type SerializeTuple = Impossible<&'a mut Buffer, Error>;
-    type SerializeTupleStruct = Impossible<&'a mut Buffer, Error>;
-    type SerializeTupleVariant = Impossible<&'a mut Buffer, Error>;
-    type SerializeMap = Impossible<&'a mut Buffer, Error>;
-    type SerializeStruct = Impossible<&'a mut Buffer, Error>;
-    type SerializeStructVariant = Impossible<&'a mut Buffer, Error>;
+    type SerializeSeq = Impossible<(), Error>;
+    type SerializeTuple = Impossible<(), Error>;
+    type SerializeTupleStruct = Impossible<(), Error>;
+    type SerializeTupleVariant = Impossible<(), Error>;
+    type SerializeMap = Impossible<(), Error>;
+    type SerializeStruct = Impossible<(), Error>;
+    type SerializeStructVariant = Impossible<(), Error>;
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         self.buf.write_value(|bytes| Ok(bytes.write_u8(self.ty)?))?;
-        Ok(self.buf)
+        Ok(())
     }
 
     fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {

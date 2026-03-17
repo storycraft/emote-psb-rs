@@ -14,12 +14,6 @@ pub struct Buffer {
     pub(crate) values: Vec<BufferValue>,
     pub(crate) objects: Vec<BufferObject>,
     pub(crate) indexes: Vec<usize>,
-
-    // temporary buffers for list, map header
-    pub(crate) keys: Vec<u32>,
-    pub(crate) offsets: Vec<u64>,
-    pub(crate) map_indexes: Vec<usize>,
-    pub(crate) permutations: Vec<usize>,
 }
 
 impl Buffer {
@@ -31,11 +25,6 @@ impl Buffer {
             values: vec![],
             objects: vec![],
             indexes: vec![],
-
-            keys: vec![],
-            offsets: vec![],
-            map_indexes: vec![],
-            permutations: vec![],
         }
     }
 
@@ -105,6 +94,26 @@ impl Buffer {
 impl Default for Buffer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Temporary buffers for list, map serialization
+pub(crate) struct SerializerBuffer {
+    pub keys: Vec<u32>,
+    pub offsets: Vec<u64>,
+    pub map_indexes: Vec<usize>,
+    pub permutations: Vec<usize>,
+}
+
+impl SerializerBuffer {
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            keys: vec![],
+            offsets: vec![],
+            map_indexes: vec![],
+            permutations: vec![],
+        }
     }
 }
 
