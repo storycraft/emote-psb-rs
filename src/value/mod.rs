@@ -4,7 +4,8 @@ pub mod ser;
 
 pub(crate) mod util;
 
-use indexmap::IndexMap;
+use std::collections::HashMap;
+
 use number::PsbNumber;
 use smol_str::SmolStr;
 
@@ -64,10 +65,7 @@ pub enum PsbValue {
     List(Vec<PsbValue>),
 
     /// Map of values
-    ///
-    /// The order needs to be preserved.
-    /// Use data types which preserves order.
-    Object(IndexMap<SmolStr, PsbValue>),
+    Object(HashMap<SmolStr, PsbValue>),
 
     /// PSB intrinsic type
     CompilerNumber(PsbCompilerNumber),

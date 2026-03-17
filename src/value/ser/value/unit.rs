@@ -1,10 +1,7 @@
 use byteorder::WriteBytesExt;
 use serde::ser::Impossible;
 
-use crate::value::ser::{
-    Error,
-    buffer::{Buffer, BufferValue},
-};
+use crate::value::ser::{Error, buffer::Buffer};
 
 pub struct UnitTypeSerializer<'a> {
     marker: &'static str,
@@ -31,8 +28,7 @@ impl<'a> serde::Serializer for UnitTypeSerializer<'a> {
     type SerializeStructVariant = Impossible<&'a mut Buffer, Error>;
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        self.buf.bytes.write_u8(self.ty)?;
-        self.buf.values.push(BufferValue::Value(1));
+        self.buf.write_value(|bytes| Ok(bytes.write_u8(self.ty)?))?;
         Ok(self.buf)
     }
 

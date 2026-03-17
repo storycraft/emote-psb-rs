@@ -3,6 +3,8 @@ use std::io::{self, ErrorKind, Write};
 use indexmap::{IndexSet, set::Slice};
 use smol_str::SmolStr;
 
+use crate::value::ser::Error;
+
 #[derive(Debug, Clone)]
 /// Intermediate psb value serialization buffer
 pub struct Buffer {
@@ -11,10 +13,13 @@ pub struct Buffer {
     pub(crate) bytes: Vec<u8>,
     pub(crate) values: Vec<BufferValue>,
     pub(crate) objects: Vec<BufferObject>,
+    pub(crate) indexes: Vec<usize>,
 
     // temporary buffers for list, map header
     pub(crate) keys: Vec<u32>,
     pub(crate) offsets: Vec<u64>,
+    pub(crate) map_indexes: Vec<usize>,
+    pub(crate) permutations: Vec<usize>,
 }
 
 impl Buffer {
@@ -25,8 +30,12 @@ impl Buffer {
             bytes: vec![],
             values: vec![],
             objects: vec![],
+            indexes: vec![],
+
             keys: vec![],
             offsets: vec![],
+            map_indexes: vec![],
+            permutations: vec![],
         }
     }
 
@@ -49,48 +58,50 @@ impl Buffer {
 
     #[inline]
     pub fn write(&self, stream: &mut impl Write) -> io::Result<()> {
-        self.write_inner(0, 0, stream)?;
+        self.write_inner(0, stream)?;
         Ok(())
     }
 
-    fn write_inner(
-        &self,
-        value_index: usize,
-        data_start: usize,
-        stream: &mut impl Write,
-    ) -> io::Result<(usize, usize)> {
+    fn write_inner(&self, value_index: usize, stream: &mut impl Write) -> io::Result<()> {
         let Some(&current) = self.values.get(value_index) else {
-            return Ok((0, 0));
+            return Ok(());
         };
 
         match current {
             BufferValue::Invalid => Err(ErrorKind::InvalidData.into()),
-            BufferValue::Value(size) => {
-                stream.write_all(&self.bytes[data_start..][..size])?;
-                Ok((size, 1))
+            BufferValue::Value {
+                data_start,
+                data_end,
+            } => {
+                stream.write_all(&self.bytes[data_start..data_end])?;
+                Ok(())
             }
             BufferValue::Object { index } => {
                 let object = self.objects[index];
-                stream.write_all(
-                    &self.bytes[data_start + object.header_offset..][..object.header_size],
-                )?;
+                stream.write_all(&self.bytes[object.header_start..object.header_end])?;
 
-                let mut value_offset = 1;
-                let mut data_offset = 0;
-                for _ in 0..object.len {
-                    let item_index = value_index + value_offset;
-                    let item_offset = data_start + data_offset;
-                    let (written, values_read) =
-                        self.write_inner(item_index, item_offset, stream)?;
-
-                    data_offset += written;
-                    value_offset += values_read;
+                for i in 0..object.len {
+                    let value_index = self.indexes[object.index_start + i];
+                    self.write_inner(value_index, stream)?;
                 }
-                debug_assert_eq!(data_offset, object.header_offset);
 
-                Ok((object.header_offset + object.header_size, value_offset))
+                Ok(())
             }
         }
+    }
+
+    pub(crate) fn write_value(
+        &mut self,
+        f: impl FnOnce(&mut Vec<u8>) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let data_start = self.bytes.len();
+        f(&mut self.bytes)?;
+        self.values.push(BufferValue::Value {
+            data_start,
+            data_end: self.bytes.len(),
+        });
+
+        Ok(())
     }
 }
 
@@ -103,7 +114,7 @@ impl Default for Buffer {
 #[derive(Debug, Clone, Copy)]
 pub enum BufferValue {
     Invalid,
-    Value(usize),
+    Value { data_start: usize, data_end: usize },
     Object { index: usize },
 }
 
@@ -111,10 +122,13 @@ impl BufferValue {
     pub fn size(self, buf: &Buffer) -> usize {
         match self {
             BufferValue::Invalid => 0,
-            BufferValue::Value(size) => size,
+            BufferValue::Value {
+                data_start,
+                data_end,
+            } => data_end - data_start,
             BufferValue::Object { index } => {
                 let obj = buf.objects[index];
-                obj.header_offset + obj.header_size
+                obj.header_end - obj.data_start
             }
         }
     }
@@ -123,6 +137,8 @@ impl BufferValue {
 #[derive(Debug, Clone, Copy)]
 pub struct BufferObject {
     pub len: usize,
-    pub header_offset: usize,
-    pub header_size: usize,
+    pub data_start: usize,
+    pub header_start: usize,
+    pub header_end: usize,
+    pub index_start: usize,
 }

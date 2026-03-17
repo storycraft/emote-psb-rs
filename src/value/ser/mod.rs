@@ -23,7 +23,6 @@ use crate::value::{
     PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal, PsbCompilerNumber,
     PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource,
     ser::{
-        buffer::BufferValue,
         map::{MapSerializer, StructSerializer},
         seq::SeqSerializer,
         special::SpecialValueSerializer,
@@ -56,10 +55,9 @@ impl<'a> serde::Serializer for Serializer<'a> {
     type SerializeStructVariant = MapSerializer<'a>;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        self.0
-            .bytes
-            .write_u8(if v { PSB_TYPE_TRUE } else { PSB_TYPE_FALSE })?;
-        self.0.values.push(BufferValue::Value(1));
+        self.0.write_value(|bytes| {
+            Ok(bytes.write_u8(if v { PSB_TYPE_TRUE } else { PSB_TYPE_FALSE })?)
+        })?;
 
         Ok(self.0)
     }
@@ -78,15 +76,17 @@ impl<'a> serde::Serializer for Serializer<'a> {
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
         if v == 0 {
-            self.0.bytes.write_u8(PSB_TYPE_INTEGER_N)?;
-            self.0.values.push(BufferValue::Value(1));
+            self.0
+                .write_value(|bytes| Ok(bytes.write_u8(PSB_TYPE_INTEGER_N)?))?;
             return Ok(self.0);
         }
 
         let n = get_n(v);
-        self.0.bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
-        self.0.bytes.write_all(&v.to_le_bytes()[..n as usize])?;
-        self.0.values.push(BufferValue::Value(1 + n as usize));
+        self.0.write_value(|bytes| {
+            bytes.write_u8(PSB_TYPE_INTEGER_N + n)?;
+            bytes.write_all(&v.to_le_bytes()[..n as usize])?;
+            Ok(())
+        })?;
         Ok(self.0)
     }
 
@@ -108,21 +108,25 @@ impl<'a> serde::Serializer for Serializer<'a> {
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
         if v == 0.0 {
-            self.0.bytes.write_u8(PSB_TYPE_FLOAT0)?;
-            self.0.values.push(BufferValue::Value(1));
+            self.0
+                .write_value(|bytes| Ok(bytes.write_u8(PSB_TYPE_FLOAT0)?))?;
             return Ok(self.0);
         }
 
-        self.0.bytes.write_u8(PSB_TYPE_FLOAT)?;
-        self.0.bytes.write_f32::<LittleEndian>(v)?;
-        self.0.values.push(BufferValue::Value(5));
+        self.0.write_value(|bytes| {
+            bytes.write_u8(PSB_TYPE_FLOAT)?;
+            bytes.write_f32::<LittleEndian>(v)?;
+            Ok(())
+        })?;
         Ok(self.0)
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        self.0.bytes.write_u8(PSB_TYPE_DOUBLE)?;
-        self.0.bytes.write_f64::<LittleEndian>(v)?;
-        self.0.values.push(BufferValue::Value(9));
+        self.0.write_value(|bytes| {
+            bytes.write_u8(PSB_TYPE_DOUBLE)?;
+            bytes.write_f64::<LittleEndian>(v)?;
+            Ok(())
+        })?;
         Ok(self.0)
     }
 
@@ -137,9 +141,11 @@ impl<'a> serde::Serializer for Serializer<'a> {
             return Err(Error::IndexOverflow);
         }
 
-        self.0.bytes.write_u8(PSB_TYPE_STRING_N + n)?;
-        self.0.bytes.write_all(&index.to_le_bytes()[..n as usize])?;
-        self.0.values.push(BufferValue::Value(1 + n as usize));
+        self.0.write_value(|bytes| {
+            bytes.write_u8(PSB_TYPE_STRING_N + n)?;
+            bytes.write_all(&index.to_le_bytes()[..n as usize])?;
+            Ok(())
+        })?;
         Ok(self.0)
     }
 
@@ -163,8 +169,8 @@ impl<'a> serde::Serializer for Serializer<'a> {
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        self.0.bytes.write_u8(PSB_TYPE_NULL)?;
-        self.0.values.push(BufferValue::Value(1));
+        self.0
+            .write_value(|bytes| Ok(bytes.write_u8(PSB_TYPE_NULL)?))?;
         Ok(self.0)
     }
 
@@ -206,12 +212,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        if let Some(len) = len {
-            self.0.values.reserve(len + 1);
-            self.0.offsets.reserve(len);
-        }
-
-        Ok(SeqSerializer::new(self.0))
+        Ok(SeqSerializer::new(self.0, len))
     }
 
     fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
@@ -237,13 +238,7 @@ impl<'a> serde::Serializer for Serializer<'a> {
     }
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        if let Some(len) = len {
-            self.0.values.reserve(len + 1);
-            self.0.keys.reserve(len);
-            self.0.offsets.reserve(len);
-        }
-
-        Ok(MapSerializer::new(self.0))
+        Ok(MapSerializer::new(self.0, len))
     }
 
     fn serialize_struct(

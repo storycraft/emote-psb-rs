@@ -4,10 +4,7 @@ use byteorder::WriteBytesExt;
 use serde::ser::Impossible;
 
 use crate::value::{
-    ser::{
-        Error,
-        buffer::{Buffer, BufferValue},
-    },
+    ser::{Error, buffer::Buffer},
     util::get_uint_n,
 };
 
@@ -37,9 +34,11 @@ impl<'a> serde::Serializer for RefTypeSerializer<'a> {
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         let n = get_uint_n(v as _);
-        self.buf.bytes.write_u8(self.ty + n)?;
-        self.buf.bytes.write_all(&v.to_le_bytes()[..n as usize])?;
-        self.buf.values.push(BufferValue::Value(1 + n as usize));
+        self.buf.write_value(|bytes| {
+            bytes.write_u8(self.ty + n)?;
+            bytes.write_all(&v.to_le_bytes()[..n as usize])?;
+            Ok(())
+        })?;
 
         Ok(self.buf)
     }

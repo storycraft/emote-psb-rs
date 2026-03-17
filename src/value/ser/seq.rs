@@ -12,25 +12,28 @@ use crate::value::{
 
 pub struct SeqSerializer<'a> {
     len: usize,
-    next_offset: usize,
     list_index: usize,
     data_start: usize,
-    offset_start: usize,
+    temp_index_start: usize,
     buf: &'a mut Buffer,
 }
 
 impl<'a> SeqSerializer<'a> {
-    pub fn new(buf: &'a mut Buffer) -> Self {
+    pub fn new(buf: &'a mut Buffer, len: Option<usize>) -> Self {
+        if let Some(len) = len {
+            buf.values.reserve(len + 1);
+            buf.map_indexes.reserve(len);
+        }
+
         let list_index = buf.values.len();
         buf.values.push(BufferValue::Invalid);
         let data_start = buf.bytes.len();
-        let offset_start = buf.offsets.len();
+        let temp_index_start = buf.map_indexes.len();
         Self {
             len: 0,
-            next_offset: 0,
             list_index,
             data_start,
-            offset_start,
+            temp_index_start,
             buf,
         }
     }
@@ -48,27 +51,36 @@ impl<'a> SerializeSeq for SeqSerializer<'a> {
 
         let index = self.buf.values.len();
         value.serialize(Serializer(self.buf))?;
-
-        let offset = self.next_offset;
-        self.next_offset += self.buf.values[index].size(self.buf);
-        self.buf.offsets.push(offset as _);
+        self.buf.map_indexes.push(index);
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
+        let mut offset = 0;
+        for i in 0..self.len {
+            let value_index = self.buf.map_indexes[self.temp_index_start + i];
+            self.buf.indexes.push(value_index);
+            self.buf.offsets.push(offset);
+            offset += self.buf.values[value_index].size(self.buf) as u64;
+        }
+        let index_start = self.buf.indexes.len();
+        self.buf
+            .indexes
+            .extend(self.buf.map_indexes.drain(self.temp_index_start..));
+
         let header_start = self.buf.bytes.len();
         self.buf.bytes.write_u8(PSB_TYPE_LIST)?;
-        write_uint_array(&mut self.buf.bytes, &self.buf.offsets[self.offset_start..])?;
-        debug_assert_eq!(self.buf.offsets.len() - self.offset_start, self.len);
+        write_uint_array(&mut self.buf.bytes, &self.buf.offsets)?;
         let header_end = self.buf.bytes.len();
-
-        self.buf.offsets.drain(self.offset_start..);
+        self.buf.offsets.clear();
 
         let index = self.buf.objects.len();
         self.buf.objects.push(BufferObject {
             len: self.len,
-            header_offset: header_start - self.data_start,
-            header_size: header_end - header_start,
+            data_start: self.data_start,
+            header_start,
+            header_end,
+            index_start,
         });
 
         self.buf.values[self.list_index] = BufferValue::Object { index };

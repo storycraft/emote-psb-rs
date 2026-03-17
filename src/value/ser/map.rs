@@ -44,28 +44,32 @@ impl<'a> SerializeStruct for StructSerializer<'a> {
 
 pub struct MapSerializer<'a> {
     len: usize,
-    next_offset: usize,
     map_index: usize,
     data_start: usize,
     key_start: usize,
-    offset_start: usize,
+    temp_index_start: usize,
     buf: &'a mut Buffer,
 }
 
 impl<'a> MapSerializer<'a> {
-    pub fn new(buf: &'a mut Buffer) -> Self {
+    pub fn new(buf: &'a mut Buffer, len: Option<usize>) -> Self {
+        if let Some(len) = len {
+            buf.values.reserve(len + 1);
+            buf.keys.reserve(len);
+            buf.map_indexes.reserve(len);
+        }
+
         let map_index = buf.values.len();
         buf.values.push(BufferValue::Invalid);
         let data_start = buf.bytes.len();
         let key_start = buf.keys.len();
-        let offset_start = buf.offsets.len();
+        let temp_index_start = buf.map_indexes.len();
         Self {
             len: 0,
-            next_offset: 0,
             map_index,
             data_start,
             key_start,
-            offset_start,
+            temp_index_start,
             buf,
         }
     }
@@ -90,30 +94,52 @@ impl<'a> SerializeMap for MapSerializer<'a> {
     {
         let index = self.buf.values.len();
         value.serialize(Serializer(self.buf))?;
-
-        let offset = self.next_offset;
-        self.next_offset += self.buf.values[index].size(self.buf);
-        self.buf.offsets.push(offset as u64);
+        self.buf.map_indexes.push(index);
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
+        debug_assert_eq!(self.buf.keys.len() - self.key_start, self.len);
+        debug_assert_eq!(self.buf.map_indexes.len() - self.temp_index_start, self.len);
+
+        self.buf.permutations.reserve(self.len);
+        for i in 0..self.len {
+            self.buf.permutations.push(i);
+        }
+        self.buf.permutations.sort_unstable_by(|a, b| {
+            self.buf.keys[self.key_start + a].cmp(&self.buf.keys[self.key_start + b])
+        });
+        self.buf.keys[self.key_start..].sort_unstable();
+
+        let index_start = self.buf.indexes.len();
+        let mut offset = 0;
+        for src_i in 0..self.len {
+            let dest_i = self.buf.permutations[src_i];
+            let value_index = self.buf.map_indexes[self.temp_index_start + dest_i];
+            self.buf.offsets.push(offset);
+            self.buf.indexes.push(value_index);
+
+            offset += self.buf.values[value_index].size(self.buf) as u64;
+        }
+        self.buf.permutations.clear();
+
         let header_start = self.buf.bytes.len();
         self.buf.bytes.write_u8(PSB_TYPE_OBJECT)?;
-        debug_assert_eq!(self.buf.keys.len() - self.key_start, self.len);
         write_uint_array(&mut self.buf.bytes, &self.buf.keys[self.key_start..])?;
-        debug_assert_eq!(self.buf.offsets.len() - self.offset_start, self.len);
-        write_uint_array(&mut self.buf.bytes, &self.buf.offsets[self.offset_start..])?;
+        write_uint_array(&mut self.buf.bytes, &self.buf.offsets)?;
         let header_end = self.buf.bytes.len();
 
         self.buf.keys.drain(self.key_start..);
-        self.buf.offsets.drain(self.offset_start..);
+        self.buf.map_indexes.drain(self.temp_index_start..);
+        self.buf.offsets.clear();
 
         let index = self.buf.objects.len();
         self.buf.objects.push(BufferObject {
             len: self.len,
-            header_offset: header_start - self.data_start,
-            header_size: header_end - header_start,
+            data_start: self.data_start,
+            header_start,
+            header_end,
+            index_start,
         });
 
         self.buf.values[self.map_index] = BufferValue::Object { index };
