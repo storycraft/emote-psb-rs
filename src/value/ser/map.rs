@@ -111,6 +111,8 @@ impl<'a> SerializeMap for MapSerializer<'a> {
         });
         self.buf.keys[self.key_start..].sort_unstable();
 
+        self.buf.offsets.reserve(self.len);
+        self.buf.indexes.reserve(self.len);
         let index_start = self.buf.indexes.len();
         let mut offset = 0;
         for src_i in 0..self.len {
