@@ -4,10 +4,7 @@ use byteorder::WriteBytesExt;
 use serde::ser::Impossible;
 
 use crate::value::{
-    ser::{
-        Error,
-        buffer::{Buffer, BufferValue},
-    },
+    ser::{Error, buffer::Buffer},
     util::get_uint_n,
 };
 
@@ -24,24 +21,26 @@ impl<'a> RefTypeSerializer<'a> {
 }
 
 impl<'a> serde::Serializer for RefTypeSerializer<'a> {
-    type Ok = &'a mut Buffer;
+    type Ok = ();
     type Error = Error;
 
-    type SerializeSeq = Impossible<&'a mut Buffer, Error>;
-    type SerializeTuple = Impossible<&'a mut Buffer, Error>;
-    type SerializeTupleStruct = Impossible<&'a mut Buffer, Error>;
-    type SerializeTupleVariant = Impossible<&'a mut Buffer, Error>;
-    type SerializeMap = Impossible<&'a mut Buffer, Error>;
-    type SerializeStruct = Impossible<&'a mut Buffer, Error>;
-    type SerializeStructVariant = Impossible<&'a mut Buffer, Error>;
+    type SerializeSeq = Impossible<Self::Ok, Error>;
+    type SerializeTuple = Impossible<Self::Ok, Error>;
+    type SerializeTupleStruct = Impossible<Self::Ok, Error>;
+    type SerializeTupleVariant = Impossible<Self::Ok, Error>;
+    type SerializeMap = Impossible<Self::Ok, Error>;
+    type SerializeStruct = Impossible<Self::Ok, Error>;
+    type SerializeStructVariant = Impossible<Self::Ok, Error>;
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         let n = get_uint_n(v as _);
-        self.buf.bytes.write_u8(self.ty + n)?;
-        self.buf.bytes.write_all(&v.to_le_bytes()[..n as usize])?;
-        self.buf.values.push(BufferValue::Value(1 + n as usize));
+        self.buf.write_value(|bytes| {
+            bytes.write_u8(self.ty + n)?;
+            bytes.write_all(&v.to_le_bytes()[..n as usize])?;
+            Ok(())
+        })?;
 
-        Ok(self.buf)
+        Ok(())
     }
 
     fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {
