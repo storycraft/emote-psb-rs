@@ -1,8 +1,8 @@
 [package]
 name = "emote-psb"
-version = "0.6.0"
+description = "E-mote PSB/MDF serde serialization and deserialization"
+version = "0.7.0"
 authors = ["storycraft <storycraft@pancake.sh>"]
-description = "E-mote PSB file"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/storycraft/emote-psb-rs"
