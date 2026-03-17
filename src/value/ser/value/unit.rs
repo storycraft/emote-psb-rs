@@ -19,13 +19,13 @@ impl<'a> serde::Serializer for UnitTypeSerializer<'a> {
     type Ok = ();
     type Error = Error;
 
-    type SerializeSeq = Impossible<(), Error>;
-    type SerializeTuple = Impossible<(), Error>;
-    type SerializeTupleStruct = Impossible<(), Error>;
-    type SerializeTupleVariant = Impossible<(), Error>;
-    type SerializeMap = Impossible<(), Error>;
-    type SerializeStruct = Impossible<(), Error>;
-    type SerializeStructVariant = Impossible<(), Error>;
+    type SerializeSeq = Impossible<Self::Ok, Error>;
+    type SerializeTuple = Impossible<Self::Ok, Error>;
+    type SerializeTupleStruct = Impossible<Self::Ok, Error>;
+    type SerializeTupleVariant = Impossible<Self::Ok, Error>;
+    type SerializeMap = Impossible<Self::Ok, Error>;
+    type SerializeStruct = Impossible<Self::Ok, Error>;
+    type SerializeStructVariant = Impossible<Self::Ok, Error>;
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         self.buf.write_value(|bytes| Ok(bytes.write_u8(self.ty)?))?;

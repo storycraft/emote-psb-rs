@@ -24,13 +24,13 @@ impl<'a> serde::Serializer for RefTypeSerializer<'a> {
     type Ok = ();
     type Error = Error;
 
-    type SerializeSeq = Impossible<(), Error>;
-    type SerializeTuple = Impossible<(), Error>;
-    type SerializeTupleStruct = Impossible<(), Error>;
-    type SerializeTupleVariant = Impossible<(), Error>;
-    type SerializeMap = Impossible<(), Error>;
-    type SerializeStruct = Impossible<(), Error>;
-    type SerializeStructVariant = Impossible<(), Error>;
+    type SerializeSeq = Impossible<Self::Ok, Error>;
+    type SerializeTuple = Impossible<Self::Ok, Error>;
+    type SerializeTupleStruct = Impossible<Self::Ok, Error>;
+    type SerializeTupleVariant = Impossible<Self::Ok, Error>;
+    type SerializeMap = Impossible<Self::Ok, Error>;
+    type SerializeStruct = Impossible<Self::Ok, Error>;
+    type SerializeStructVariant = Impossible<Self::Ok, Error>;
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         let n = get_uint_n(v as _);
