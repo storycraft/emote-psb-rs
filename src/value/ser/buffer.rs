@@ -69,11 +69,8 @@ impl Buffer {
 
         match current {
             BufferValue::Invalid => Err(ErrorKind::InvalidData.into()),
-            BufferValue::Value {
-                data_start,
-                data_end,
-            } => {
-                stream.write_all(&self.bytes[data_start..data_end])?;
+            BufferValue::Value { data_start, size } => {
+                stream.write_all(&self.bytes[data_start..][..size as usize])?;
                 Ok(())
             }
             BufferValue::Object { index } => {
@@ -98,7 +95,7 @@ impl Buffer {
         f(&mut self.bytes)?;
         self.values.push(BufferValue::Value {
             data_start,
-            data_end: self.bytes.len(),
+            size: (self.bytes.len() - data_start) as u32,
         });
 
         Ok(())
@@ -114,7 +111,7 @@ impl Default for Buffer {
 #[derive(Debug, Clone, Copy)]
 pub enum BufferValue {
     Invalid,
-    Value { data_start: usize, data_end: usize },
+    Value { data_start: usize, size: u32 },
     Object { index: usize },
 }
 
@@ -122,10 +119,7 @@ impl BufferValue {
     pub fn size(self, buf: &Buffer) -> usize {
         match self {
             BufferValue::Invalid => 0,
-            BufferValue::Value {
-                data_start,
-                data_end,
-            } => data_end - data_start,
+            BufferValue::Value { size, .. } => size as _,
             BufferValue::Object { index } => {
                 let obj = buf.objects[index];
                 obj.header_end - obj.data_start

@@ -47,7 +47,7 @@ pub struct MapSerializer<'a> {
     map_index: usize,
     data_start: usize,
     key_start: usize,
-    temp_index_start: usize,
+    map_index_start: usize,
     buf: &'a mut Buffer,
 }
 
@@ -63,13 +63,13 @@ impl<'a> MapSerializer<'a> {
         buf.values.push(BufferValue::Invalid);
         let data_start = buf.bytes.len();
         let key_start = buf.keys.len();
-        let temp_index_start = buf.map_indexes.len();
+        let map_index_start = buf.map_indexes.len();
         Self {
             len: 0,
             map_index,
             data_start,
             key_start,
-            temp_index_start,
+            map_index_start,
             buf,
         }
     }
@@ -100,7 +100,7 @@ impl<'a> SerializeMap for MapSerializer<'a> {
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         debug_assert_eq!(self.buf.keys.len() - self.key_start, self.len);
-        debug_assert_eq!(self.buf.map_indexes.len() - self.temp_index_start, self.len);
+        debug_assert_eq!(self.buf.map_indexes.len() - self.map_index_start, self.len);
 
         self.buf.permutations.reserve(self.len);
         for i in 0..self.len {
@@ -115,7 +115,7 @@ impl<'a> SerializeMap for MapSerializer<'a> {
         let mut offset = 0;
         for src_i in 0..self.len {
             let dest_i = self.buf.permutations[src_i];
-            let value_index = self.buf.map_indexes[self.temp_index_start + dest_i];
+            let value_index = self.buf.map_indexes[self.map_index_start + dest_i];
             self.buf.offsets.push(offset);
             self.buf.indexes.push(value_index);
 
@@ -130,7 +130,7 @@ impl<'a> SerializeMap for MapSerializer<'a> {
         let header_end = self.buf.bytes.len();
 
         self.buf.keys.drain(self.key_start..);
-        self.buf.map_indexes.drain(self.temp_index_start..);
+        self.buf.map_indexes.drain(self.map_index_start..);
         self.buf.offsets.clear();
 
         let index = self.buf.objects.len();
