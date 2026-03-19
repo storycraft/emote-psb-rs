@@ -7,7 +7,6 @@ It stores structured data such as animation trees, sprites, and metadata that dr
 MDF files are compressed, encrypted variants of PSB files.
 
 ## Features
-
  * **Read PSB files** — parse PSB files from any `BufRead + Seek` stream via `PsbFile::open`, supporting multiple PSB format versions
  * **Write PSB files** — serialize data to PSB format via `PsbWriter`, with configurable version, an encryption header flag, and Adler-32 checksum generation
  * **Read MDF files** — transparently decompress zlib-compressed MDF containers via `MdfReader`, exposing the inner PSB stream for further parsing
