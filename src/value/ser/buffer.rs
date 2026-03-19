@@ -5,6 +5,7 @@ use smol_str::SmolStr;
 
 use crate::value::ser::Error;
 
+#[derive(Debug, Clone)]
 /// Intermediate buffer that accumulates a serialized PSB value tree before it is
 /// written to an output stream.
 ///
@@ -14,7 +15,6 @@ use crate::value::ser::Error;
 ///
 /// [`serialize`]: crate::value::ser::serialize
 /// [`PsbWriter::new_with_buffer`]: crate::psb::write::PsbWriter::new_with_buffer
-#[derive(Debug, Clone)]
 pub struct Buffer {
     pub(crate) names: IndexSet<SmolStr>,
     pub(crate) strings: IndexSet<SmolStr>,
@@ -133,8 +133,8 @@ impl SerializerBuffer {
     }
 }
 
-/// A single node in the serialized PSB value tree held by a [`Buffer`].
 #[derive(Debug, Clone, Copy)]
+/// A single node in the serialized PSB value tree held by a [`Buffer`].
 pub enum BufferValue {
     /// A placeholder for a value that has not been fully written yet.
     Invalid,
@@ -157,8 +157,8 @@ impl BufferValue {
     }
 }
 
-/// Metadata for a list or object node stored in a [`Buffer`]'s object table.
 #[derive(Debug, Clone, Copy)]
+/// Metadata for a list or object node stored in a [`Buffer`]'s object table.
 pub struct BufferObject {
     /// Number of child values.
     pub len: usize,

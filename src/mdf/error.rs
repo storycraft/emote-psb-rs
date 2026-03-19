@@ -4,8 +4,8 @@ use std::io;
 
 use thiserror::Error;
 
-/// Error returned when opening (reading) an MDF file fails.
 #[derive(Debug, Error)]
+/// Error returned when opening (reading) an MDF file fails.
 pub enum MdfOpenError {
     /// The stream does not begin with the expected MDF signature bytes.
     #[error("invalid mdf signature")]
@@ -16,8 +16,8 @@ pub enum MdfOpenError {
     Io(#[from] io::Error),
 }
 
-/// Error returned when creating (writing) an MDF file fails.
 #[derive(Debug, Error)]
+/// Error returned when creating (writing) an MDF file fails.
 pub enum MdfCreateError {
     /// An I/O error occurred while writing the MDF header.
     #[error("failed to write header")]

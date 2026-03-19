@@ -2,6 +2,7 @@
 
 use core::fmt::Debug;
 
+#[derive(Clone)]
 /// A compact, append-only table of strings backed by a single contiguous buffer.
 ///
 /// Strings are stored end-to-end without separators; their boundaries are tracked
@@ -10,7 +11,6 @@ use core::fmt::Debug;
 ///
 /// This structure is used internally to hold the PSB name table (object keys) and
 /// the string value table.
-#[derive(Clone)]
 pub struct StringTable {
     data: String,
     indices: Vec<usize>,

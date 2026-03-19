@@ -17,6 +17,7 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
 /// A PSB file writer that serializes a root value and optional binary resources.
 ///
 /// Create with [`PsbWriter::new`] (or [`PsbWriter::new_with_buffer`] for a pre-built
@@ -26,7 +27,6 @@ use crate::{
 /// [`add_resource`]: PsbWriter::add_resource
 /// [`add_extra`]: PsbWriter::add_extra
 /// [`finish`]: PsbWriter::finish
-#[derive(Debug)]
 pub struct PsbWriter<T> {
     version: u16,
     offset_start: u64,
