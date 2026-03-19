@@ -32,13 +32,8 @@
 //! writer.finish().unwrap();
 //! ```
 
-/// PSB/MDF reading and writing support.
 pub mod psb;
-
-/// PSB value types and serde serialization/deserialization.
 pub mod value;
-
-/// MDF (compressed PSB) reading and writing support.
 pub mod mdf;
 
 /// PSB file signature (`"PSB"` as a little-endian `u32`).

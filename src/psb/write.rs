@@ -1,3 +1,5 @@
+//! PSB file writing support.
+
 use core::fmt::{self, Debug};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 

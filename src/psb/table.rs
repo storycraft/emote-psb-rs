@@ -1,3 +1,5 @@
+//! PSB string table used to store names and string values.
+
 use core::fmt::Debug;
 
 /// A compact, append-only table of strings backed by a single contiguous buffer.

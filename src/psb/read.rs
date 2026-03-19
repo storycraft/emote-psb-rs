@@ -1,3 +1,5 @@
+//! PSB file reading support.
+
 use std::io::{self, BufRead, Read, Seek, SeekFrom, Take};
 
 use byteorder::{LittleEndian, ReadBytesExt};

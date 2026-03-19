@@ -1,3 +1,5 @@
+//! Serde serializer for PSB binary data.
+
 mod buffer;
 mod error;
 mod map;

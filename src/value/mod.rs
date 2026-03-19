@@ -1,10 +1,7 @@
-/// Serde deserializer for PSB binary data.
+//! PSB value types and serde serialization/deserialization.
+
 pub mod de;
-
-/// PSB numeric value type.
 pub mod number;
-
-/// Serde serializer for PSB binary data.
 pub mod ser;
 
 pub(crate) mod util;

@@ -1,3 +1,5 @@
+//! PSB numeric value type.
+
 /// A PSB numeric value, which may be a signed 64-bit integer, a 32-bit float, or a 64-bit double.
 #[derive(
     Debug, Clone, Copy, PartialEq, derive_more::From, serde::Serialize, serde::Deserialize,

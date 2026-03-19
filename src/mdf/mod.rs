@@ -1,4 +1,5 @@
-/// Error types for MDF reading and writing operations.
+//! MDF (compressed PSB) reading and writing support.
+
 pub mod error;
 
 use std::io::{self, BufRead, Read, Seek, SeekFrom, Take, Write};

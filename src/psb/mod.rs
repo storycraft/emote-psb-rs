@@ -1,13 +1,8 @@
-/// Error types for PSB reading and writing operations.
+//! PSB/MDF reading and writing support.
+
 pub mod error;
-
-/// PSB file reading support.
 pub mod read;
-
-/// PSB string table used to store names and string values.
 pub mod table;
-
-/// PSB file writing support.
 pub mod write;
 
 mod btree;

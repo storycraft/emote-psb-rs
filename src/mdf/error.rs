@@ -1,3 +1,5 @@
+//! Error types for MDF reading and writing operations.
+
 use std::io;
 
 use thiserror::Error;
