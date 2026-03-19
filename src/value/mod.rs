@@ -81,9 +81,6 @@ pub enum PsbValue {
     /// List of values
     List(Vec<PsbValue>),
 
-    /// Map of values
-    Object(HashMap<SmolStr, PsbValue>),
-
     /// PSB intrinsic type
     CompilerNumber(PsbCompilerNumber),
     /// PSB intrinsic type
@@ -98,6 +95,9 @@ pub enum PsbValue {
     CompilerBool(PsbCompilerBool),
     /// PSB intrinsic type
     CompilerBinaryTree(PsbCompilerBinaryTree),
+
+    /// Map of values
+    Object(HashMap<SmolStr, PsbValue>),
 }
 
 macro_rules! define_special_type {
@@ -149,7 +149,8 @@ macro_rules! define_special_type {
                 where
                     D: serde::Deserializer<'de>,
                 {
-                    Ok(Self $((__Inner::deserialize(__deserializer)?.field as $val))? )
+                    let __inner = __Inner::deserialize(__deserializer)?;
+                    Ok(Self $((  __inner.field as $val ))? )
                 }
             }
         };
