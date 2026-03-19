@@ -5,8 +5,16 @@ use smol_str::SmolStr;
 
 use crate::value::ser::Error;
 
+/// Intermediate buffer that accumulates a serialized PSB value tree before it is
+/// written to an output stream.
+///
+/// A `Buffer` is populated by [`serialize`] and then passed to
+/// [`PsbWriter::new_with_buffer`] to produce a complete PSB file. It can be
+/// [`cleared`](Buffer::clear) and reused across multiple serialize/write cycles.
+///
+/// [`serialize`]: crate::value::ser::serialize
+/// [`PsbWriter::new_with_buffer`]: crate::psb::write::PsbWriter::new_with_buffer
 #[derive(Debug, Clone)]
-/// Intermediate psb value serialization buffer
 pub struct Buffer {
     pub(crate) names: IndexSet<SmolStr>,
     pub(crate) strings: IndexSet<SmolStr>,
@@ -17,6 +25,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
+    /// Creates a new, empty [`Buffer`].
     pub fn new() -> Self {
         Self {
             names: IndexSet::new(),
@@ -28,10 +37,12 @@ impl Buffer {
         }
     }
 
+    /// Returns a slice of all collected object-key names in their serialized (sorted) order.
     pub fn names(&self) -> &Slice<SmolStr> {
         self.names.as_slice()
     }
 
+    /// Returns a slice of all collected string values in their serialized (sorted) order.
     pub fn strings(&self) -> &Slice<SmolStr> {
         self.strings.as_slice()
     }
@@ -46,6 +57,11 @@ impl Buffer {
     }
 
     #[inline]
+    /// Writes the serialized PSB value tree to `stream`, starting from the root value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`io::Error`] if writing to `stream` fails.
     pub fn write(&self, stream: &mut impl Write) -> io::Result<()> {
         self.write_inner(0, stream)?;
         Ok(())
@@ -117,10 +133,14 @@ impl SerializerBuffer {
     }
 }
 
+/// A single node in the serialized PSB value tree held by a [`Buffer`].
 #[derive(Debug, Clone, Copy)]
 pub enum BufferValue {
+    /// A placeholder for a value that has not been fully written yet.
     Invalid,
+    /// A leaf value stored as a raw byte slice at `data_start` with `size` bytes.
     Value { data_start: usize, size: u32 },
+    /// A composite value (list or object) whose children are tracked in the object table.
     Object { index: usize },
 }
 
@@ -137,11 +157,17 @@ impl BufferValue {
     }
 }
 
+/// Metadata for a list or object node stored in a [`Buffer`]'s object table.
 #[derive(Debug, Clone, Copy)]
 pub struct BufferObject {
+    /// Number of child values.
     pub len: usize,
+    /// Byte offset in `Buffer::bytes` where this node's data begins.
     pub data_start: usize,
+    /// Byte offset of the serialized header (type tag + offset/key arrays).
     pub header_start: usize,
+    /// Byte offset immediately after the header (first byte of child data).
     pub header_end: usize,
+    /// Starting index in `Buffer::indexes` for this node's children.
     pub index_start: usize,
 }

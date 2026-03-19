@@ -26,6 +26,10 @@ use crate::{
     },
 };
 
+/// A serde [`Deserializer`](serde::Deserializer) that reads PSB binary data from a stream.
+///
+/// Obtain one via [`PsbFile::root_deserializer`](crate::psb::read::PsbFile::root_deserializer)
+/// rather than constructing it directly.
 pub struct Deserializer<'a, T> {
     names: &'a StringTable,
     strings: &'a StringTable,
@@ -34,6 +38,7 @@ pub struct Deserializer<'a, T> {
 }
 
 impl<'a, T: BufRead + Seek> Deserializer<'a, T> {
+    /// Creates a new [`Deserializer`] that reads from `stream` using the provided name and string tables.
     pub fn new(names: &'a StringTable, strings: &'a StringTable, stream: T) -> Self {
         Self {
             names,

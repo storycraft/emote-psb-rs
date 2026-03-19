@@ -1,5 +1,10 @@
+/// Serde deserializer for PSB binary data.
 pub mod de;
+
+/// PSB numeric value type.
 pub mod number;
+
+/// Serde serializer for PSB binary data.
 pub mod ser;
 
 pub(crate) mod util;
@@ -9,38 +14,53 @@ use std::collections::HashMap;
 use number::PsbNumber;
 use smol_str::SmolStr;
 
+/// PSB type tag: null / unit value.
 pub const PSB_TYPE_NULL: u8 = 0x01;
 
+/// PSB type tag: boolean `false`.
 pub const PSB_TYPE_FALSE: u8 = 0x02;
+/// PSB type tag: boolean `true`.
 pub const PSB_TYPE_TRUE: u8 = 0x03;
 
-/// 0 <= N <= 8
+/// PSB type tag base for variable-width signed integers (N bytes follow, 0 ≤ N ≤ 8).
 pub const PSB_TYPE_INTEGER_N: u8 = 0x04;
+/// PSB type tag: 32-bit float zero (`0.0f32`).
 pub const PSB_TYPE_FLOAT0: u8 = 0x1d;
+/// PSB type tag: 32-bit float (4 bytes follow).
 pub const PSB_TYPE_FLOAT: u8 = 0x1e;
+/// PSB type tag: 64-bit double (8 bytes follow).
 pub const PSB_TYPE_DOUBLE: u8 = 0x1f;
 
-/// 1 <= N <= 8
+/// PSB type tag base for packed integer arrays (1 ≤ N ≤ 8 bytes per element).
 pub const PSB_TYPE_INTEGER_ARRAY_N: u8 = 0x0C;
 
-/// 1 <= N <= 4
+/// PSB type tag base for string references (1 ≤ N ≤ 4 bytes of index).
 pub const PSB_TYPE_STRING_N: u8 = 0x14;
 
-/// 1 <= N <= 4
+/// PSB type tag base for resource references (1 ≤ N ≤ 4 bytes of index).
 pub const PSB_TYPE_RESOURCE_N: u8 = 0x18;
 
+/// PSB type tag: ordered list of values.
 pub const PSB_TYPE_LIST: u8 = 0x20;
+/// PSB type tag: keyed object (map of string → value).
 pub const PSB_TYPE_OBJECT: u8 = 0x21;
 
-/// 1 <= N <= 4
+/// PSB type tag base for extra resource references (1 ≤ N ≤ 4 bytes of index).
 pub const PSB_TYPE_EXTRA_N: u8 = 0x21;
 
+/// PSB compiler directive tag: integer placeholder.
 pub const PSB_COMPILER_INTEGER: u8 = 0x80;
+/// PSB compiler directive tag: string placeholder.
 pub const PSB_COMPILER_STRING: u8 = 0x81;
+/// PSB compiler directive tag: resource placeholder.
 pub const PSB_COMPILER_RESOURCE: u8 = 0x82;
+/// PSB compiler directive tag: decimal placeholder.
 pub const PSB_COMPILER_DECIMAL: u8 = 0x83;
+/// PSB compiler directive tag: array placeholder.
 pub const PSB_COMPILER_ARRAY: u8 = 0x84;
+/// PSB compiler directive tag: boolean placeholder.
 pub const PSB_COMPILER_BOOL: u8 = 0x85;
+/// PSB compiler directive tag: binary-tree placeholder.
 pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

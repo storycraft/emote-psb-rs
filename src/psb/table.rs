@@ -1,5 +1,13 @@
 use core::fmt::Debug;
 
+/// A compact, append-only table of strings backed by a single contiguous buffer.
+///
+/// Strings are stored end-to-end without separators; their boundaries are tracked
+/// by a separate index vector, so each string can be retrieved in O(1) time by
+/// its integer identifier.
+///
+/// This structure is used internally to hold the PSB name table (object keys) and
+/// the string value table.
 #[derive(Clone)]
 pub struct StringTable {
     data: String,
@@ -13,6 +21,7 @@ impl Default for StringTable {
 }
 
 impl StringTable {
+    /// Creates a new, empty [`StringTable`].
     pub const fn new() -> Self {
         Self {
             data: String::new(),
@@ -20,6 +29,7 @@ impl StringTable {
         }
     }
 
+    /// Creates a new, empty [`StringTable`] with pre-allocated capacity for `size` entries.
     pub fn with_capacity(size: usize) -> Self {
         Self {
             data: String::new(),
@@ -27,6 +37,7 @@ impl StringTable {
         }
     }
 
+    /// Appends a string built from the given character iterator and returns its identifier.
     pub fn push(&mut self, data: impl IntoIterator<Item = char>) -> usize {
         let start = self.data.len();
         self.data.extend(data);
@@ -35,6 +46,7 @@ impl StringTable {
         id
     }
 
+    /// Appends `data` to the table and returns its identifier.
     pub fn push_str(&mut self, data: &str) -> usize {
         let start = self.data.len();
         self.data.push_str(data);
@@ -43,6 +55,7 @@ impl StringTable {
         id
     }
 
+    /// Returns the string with the given `id`, or `None` if `id` is out of range.
     pub fn get(&self, id: usize) -> Option<&str> {
         let start = *self.indices.get(id)?;
         let end = self.indices.get(id + 1).copied();
@@ -54,15 +67,18 @@ impl StringTable {
     }
 
     #[inline]
+    /// Returns `true` if the table contains no strings.
     pub const fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
     #[inline]
+    /// Returns the total byte length of all stored strings (not the number of entries).
     pub const fn len(&self) -> usize {
         self.data.len()
     }
 
+    /// Returns an iterator over all strings in insertion order.
     pub fn iter(&self) -> impl Iterator<Item = &str> {
         (0..self.indices.len()).flat_map(|i| self.get(i))
     }

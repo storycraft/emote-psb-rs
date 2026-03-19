@@ -15,6 +15,15 @@ use crate::{
     },
 };
 
+/// A PSB file writer that serializes a root value and optional binary resources.
+///
+/// Create with [`PsbWriter::new`] (or [`PsbWriter::new_with_buffer`] for a pre-built
+/// [`Buffer`]), then optionally attach binary resources via [`add_resource`] /
+/// [`add_extra`], and finally call [`finish`] to flush the complete file.
+///
+/// [`add_resource`]: PsbWriter::add_resource
+/// [`add_extra`]: PsbWriter::add_extra
+/// [`finish`]: PsbWriter::finish
 #[derive(Debug)]
 pub struct PsbWriter<T> {
     version: u16,
@@ -33,6 +42,18 @@ impl<T> PsbWriter<T>
 where
     T: Write + Seek,
 {
+    /// Creates a new [`PsbWriter`], serializing `root` and writing the PSB header to `stream`.
+    ///
+    /// # Parameters
+    ///
+    /// - `version` — PSB format version (2, 3, or 4).
+    /// - `encrypted` — whether the PSB encryption flag should be set.
+    /// - `root` — the root value to serialize.
+    /// - `stream` — writable, seekable output stream.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PsbWriteError`] if serialization or writing the header fails.
     pub fn new(
         version: u16,
         encrypted: bool,
@@ -44,6 +65,17 @@ where
         Self::new_with_buffer(version, encrypted, &mut buf, stream)
     }
 
+    /// Creates a new [`PsbWriter`] from a pre-populated serialization [`Buffer`].
+    ///
+    /// This is useful when the same buffer is reused across multiple writes.
+    /// The name and string tables in `buf` must already be sorted before calling
+    /// this function (i.e. after a call to [`serialize`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PsbWriteError`] if writing the header fails.
+    ///
+    /// [`serialize`]: crate::value::ser::serialize
     pub fn new_with_buffer(
         version: u16,
         encrypted: bool,
@@ -101,15 +133,30 @@ where
     }
 
     #[inline]
+    /// Attaches a binary resource stream and returns its zero-based resource index.
+    ///
+    /// The resource will be appended to the PSB resource section when [`finish`] is called.
+    ///
+    /// [`finish`]: PsbWriter::finish
     pub fn add_resource(&mut self, res: impl Read + Seek + 'static) -> io::Result<usize> {
         self.resources.add(res)
     }
 
     #[inline]
+    /// Attaches an extra (version 4+) binary resource stream and returns its index.
+    ///
+    /// Extra resources are written to the extra resource section introduced in PSB version 4.
     pub fn add_extra(&mut self, res: impl Read + Seek + 'static) -> io::Result<usize> {
         self.extra.add(res)
     }
 
+    /// Finalizes the PSB file by writing all resource data and updating the header offsets.
+    ///
+    /// Consumes the writer. The underlying stream is flushed but not closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`io::Error`] if any write or seek operation fails.
     pub fn finish(mut self) -> io::Result<()> {
         let extra_offsets = if self.version > 3 {
             let extra_offset = self.stream.psb_position()?;
