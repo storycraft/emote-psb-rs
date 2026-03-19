@@ -3,8 +3,8 @@ use std::io;
 
 use thiserror::Error;
 
-#[derive(Debug, Error)]
 /// Error returned by the PSB serializer.
+#[derive(Debug, Error)]
 pub enum Error {
     /// An I/O error occurred while writing the stream.
     #[error(transparent)]

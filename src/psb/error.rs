@@ -6,8 +6,8 @@ use thiserror::Error;
 
 use crate::value::{de, ser};
 
-#[derive(Debug, Error)]
 /// Error returned when opening (reading) a PSB file fails.
+#[derive(Debug, Error)]
 pub enum PsbOpenError {
     /// The stream does not begin with the expected PSB signature bytes.
     #[error("invalid psb signature")]
@@ -30,8 +30,8 @@ pub enum PsbOpenError {
     Io(#[from] io::Error),
 }
 
-#[derive(Debug, Error)]
 /// Error returned when writing a PSB file fails.
+#[derive(Debug, Error)]
 pub enum PsbWriteError {
     /// A value could not be serialized.
     #[error(transparent)]

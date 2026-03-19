@@ -3,8 +3,8 @@ use std::io;
 
 use thiserror::Error;
 
-#[derive(Debug, Error)]
 /// Error returned by the PSB deserializer.
+#[derive(Debug, Error)]
 pub enum Error {
     /// An unknown or unsupported PSB type tag was encountered.
     #[error("invalid psb value type: {0}")]
