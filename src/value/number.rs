@@ -22,10 +22,10 @@ impl<'de> serde::Deserialize<'de> for PsbNumber {
             }
 
             fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<PsbNumber, E> {
-                // PSB serializes signed integers through common unsigned number logic,
-                // so the bit pattern must be preserved exactly rather than numeric-converted.
-                // This mirrors serialize_u64 in the PSB value serializer.
-                Ok(PsbNumber::Integer(v as i64))
+                Err(E::invalid_type(
+                    serde::de::Unexpected::Unsigned(v),
+                    &self,
+                ))
             }
 
             fn visit_f32<E: serde::de::Error>(self, v: f32) -> Result<PsbNumber, E> {
