@@ -1,5 +1,7 @@
 //! PSB numeric value type.
 
+use serde::de::Unexpected;
+
 /// A PSB numeric value, which may be a signed 64-bit integer, a 32-bit float, or a 64-bit double.
 #[derive(Debug, Clone, Copy, PartialEq, derive_more::From, serde::Serialize)]
 #[serde(untagged)]
@@ -25,6 +27,15 @@ impl<'de> serde::Deserialize<'de> for PsbNumber {
 
             fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<PsbNumber, E> {
                 Ok(PsbNumber::Integer(v))
+            }
+
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(PsbNumber::Integer(i64::try_from(v).map_err(|_| {
+                    E::invalid_type(Unexpected::Unsigned(v), &self)
+                })?))
             }
 
             fn visit_f32<E: serde::de::Error>(self, v: f32) -> Result<PsbNumber, E> {
