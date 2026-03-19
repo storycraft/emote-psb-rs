@@ -134,20 +134,20 @@ where
         })
     }
 
-    #[inline]
     /// Attaches a binary resource stream and returns its zero-based resource index.
     ///
     /// The resource will be appended to the PSB resource section when [`finish`] is called.
     ///
     /// [`finish`]: PsbWriter::finish
+    #[inline]
     pub fn add_resource(&mut self, res: impl Read + Seek + 'static) -> io::Result<usize> {
         self.resources.add(res)
     }
 
-    #[inline]
     /// Attaches an extra (version 4+) binary resource stream and returns its index.
     ///
     /// Extra resources are written to the extra resource section introduced in PSB version 4.
+    #[inline]
     pub fn add_extra(&mut self, res: impl Read + Seek + 'static) -> io::Result<usize> {
         self.extra.add(res)
     }

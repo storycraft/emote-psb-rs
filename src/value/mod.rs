@@ -60,9 +60,9 @@ pub const PSB_COMPILER_BOOL: u8 = 0x85;
 /// PSB compiler directive tag: binary-tree placeholder.
 pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
+/// Variants of psb data type
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
-/// Variants of psb data type
 pub enum PsbValue {
     /// An empty or null type
     Null,

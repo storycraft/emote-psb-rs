@@ -49,8 +49,8 @@ impl<T: BufRead> MdfReader<T> {
         })
     }
 
-    #[inline]
     /// Returns total size of mdf data stream
+    #[inline]
     pub const fn size(&self) -> u32 {
         self.size
     }

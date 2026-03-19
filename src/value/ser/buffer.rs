@@ -56,12 +56,12 @@ impl Buffer {
         self.strings.clear();
     }
 
-    #[inline]
     /// Writes the serialized PSB value tree to `stream`, starting from the root value.
     ///
     /// # Errors
     ///
     /// Returns an [`io::Error`] if writing to `stream` fails.
+    #[inline]
     pub fn write(&self, stream: &mut impl Write) -> io::Result<()> {
         self.write_inner(0, stream)?;
         Ok(())

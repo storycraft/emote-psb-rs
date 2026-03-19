@@ -15,10 +15,10 @@ use crate::{
     },
 };
 
-#[derive(Debug)]
 /// An opened PSB file, providing access to the root value, string tables, and resources.
 ///
 /// `T` is the underlying buffered I/O stream (e.g. `BufReader<File>`).
+#[derive(Debug)]
 pub struct PsbFile<T> {
     /// Whether the PSB data is encrypted.
     pub encrypted: bool,
@@ -169,14 +169,14 @@ impl<T: BufRead + Seek> PsbFile<T> {
         Ok(list)
     }
 
-    #[inline]
     /// Returns the number of binary resources embedded in this PSB file.
+    #[inline]
     pub const fn resources(&self) -> usize {
         self.resources.len()
     }
 
-    #[inline]
     /// Returns the number of extra (version 4+) binary resources embedded in this PSB file.
+    #[inline]
     pub const fn extra_resources(&self) -> usize {
         self.extra.len()
     }
@@ -246,17 +246,17 @@ impl<T: BufRead + Seek> PsbFile<T> {
         ))))
     }
 
-    #[inline]
     /// Consumes the [`PsbFile`] and returns the underlying stream.
+    #[inline]
     pub fn into_inner(self) -> T {
         self.stream
     }
 }
 
-#[repr(transparent)]
 /// A bounded, seekable stream over a single binary resource within a PSB file.
 ///
 /// Obtained via [`PsbFile::open_resource`] or [`PsbFile::open_extra_resource`].
+#[repr(transparent)]
 pub struct PsbResourceStream<'a, T>(Take<&'a mut T>);
 
 impl<T: Read> Read for PsbResourceStream<'_, T> {

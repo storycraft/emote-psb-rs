@@ -68,14 +68,14 @@ impl StringTable {
         })
     }
 
-    #[inline]
     /// Returns `true` if the table contains no strings.
+    #[inline]
     pub const fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
-    #[inline]
     /// Returns the total byte length of all stored strings (not the number of entries).
+    #[inline]
     pub const fn len(&self) -> usize {
         self.data.len()
     }
