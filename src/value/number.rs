@@ -21,13 +21,6 @@ impl<'de> serde::Deserialize<'de> for PsbNumber {
                 Ok(PsbNumber::Integer(v))
             }
 
-            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<PsbNumber, E> {
-                Err(E::invalid_type(
-                    serde::de::Unexpected::Unsigned(v),
-                    &self,
-                ))
-            }
-
             fn visit_f32<E: serde::de::Error>(self, v: f32) -> Result<PsbNumber, E> {
                 Ok(PsbNumber::Float(v))
             }
