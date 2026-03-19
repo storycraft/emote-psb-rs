@@ -1,3 +1,5 @@
+//! Serde serializer for PSB binary data.
+
 mod buffer;
 mod error;
 mod map;
@@ -33,6 +35,16 @@ use crate::value::{
     util::{get_n, get_uint_n},
 };
 
+/// Serializes `value` into the given [`Buffer`], preparing it for writing to a stream.
+///
+/// This function performs two passes over `value`:
+/// 1. A string-collection pass that builds the sorted name/string tables.
+/// 2. A binary-encoding pass that writes PSB-formatted bytes into `buf`.
+///
+/// The resulting buffer can be passed to [`PsbWriter::new_with_buffer`] to produce a
+/// complete PSB file.
+///
+/// [`PsbWriter::new_with_buffer`]: crate::psb::write::PsbWriter::new_with_buffer
 pub fn serialize(value: &impl Serialize, buf: &mut Buffer) -> Result<(), Error> {
     value.serialize(StringCollector(buf))?;
     buf.names.sort_unstable();

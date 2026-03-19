@@ -1,3 +1,5 @@
+//! PSB file reading support.
+
 use std::io::{self, BufRead, Read, Seek, SeekFrom, Take};
 
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -13,18 +15,26 @@ use crate::{
     },
 };
 
+/// An opened PSB file, providing access to the root value, string tables, and resources.
+///
+/// `T` is the underlying buffered I/O stream (e.g. `BufReader<File>`).
 #[derive(Debug)]
 pub struct PsbFile<T> {
+    /// Whether the PSB data is encrypted.
     pub encrypted: bool,
+    /// PSB format version number.
     pub version: u16,
 
+    /// Table of property names used in PSB objects.
     pub names: StringTable,
+    /// Table of string values referenced by PSB string entries.
     pub strings: StringTable,
     resources: Vec<PsbResourceItem>,
 
     /// Offset to root object
     entrypoint: u64,
 
+    /// Adler-32 checksum of the PSB header offsets, present in version 3 and later.
     pub checksum: Option<u32>,
     extra: Vec<PsbResourceItem>,
     stream: T,
@@ -159,16 +169,21 @@ impl<T: BufRead + Seek> PsbFile<T> {
         Ok(list)
     }
 
+    /// Returns the number of binary resources embedded in this PSB file.
     #[inline]
     pub const fn resources(&self) -> usize {
         self.resources.len()
     }
 
+    /// Returns the number of extra (version 4+) binary resources embedded in this PSB file.
     #[inline]
     pub const fn extra_resources(&self) -> usize {
         self.extra.len()
     }
 
+    /// Returns a [`Deserializer`] positioned at the root value of the PSB file.
+    ///
+    /// The deserializer borrows the file's name/string tables and the underlying stream.
     pub fn root_deserializer<'a>(&'a mut self) -> io::Result<Deserializer<'a, &'a mut T>> {
         self.stream.seek(SeekFrom::Start(self.entrypoint))?;
         Ok(Deserializer::new(
@@ -178,10 +193,22 @@ impl<T: BufRead + Seek> PsbFile<T> {
         ))
     }
 
+    /// Deserializes the root PSB value into the requested type `V`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`de::Error`] if the root value cannot be deserialized as `V`.
     pub fn deserialize_root<V: DeserializeOwned>(&mut self) -> Result<V, de::Error> {
         V::deserialize(&mut self.root_deserializer()?)
     }
 
+    /// Opens a stream over the binary resource at the given `index`.
+    ///
+    /// Returns `Ok(None)` if `index` is out of range.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`io::Error`] if seeking to the resource position fails.
     pub fn open_resource<'a>(
         &'a mut self,
         index: usize,
@@ -197,6 +224,13 @@ impl<T: BufRead + Seek> PsbFile<T> {
         ))))
     }
 
+    /// Opens a stream over the extra (version 4+) binary resource at the given `index`.
+    ///
+    /// Returns `Ok(None)` if `index` is out of range.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`io::Error`] if seeking to the resource position fails.
     pub fn open_extra_resource<'a>(
         &'a mut self,
         index: usize,
@@ -212,12 +246,16 @@ impl<T: BufRead + Seek> PsbFile<T> {
         ))))
     }
 
+    /// Consumes the [`PsbFile`] and returns the underlying stream.
     #[inline]
     pub fn into_inner(self) -> T {
         self.stream
     }
 }
 
+/// A bounded, seekable stream over a single binary resource within a PSB file.
+///
+/// Obtained via [`PsbFile::open_resource`] or [`PsbFile::open_extra_resource`].
 #[repr(transparent)]
 pub struct PsbResourceStream<'a, T>(Take<&'a mut T>);
 
