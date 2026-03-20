@@ -32,9 +32,9 @@
 //! writer.finish().unwrap();
 //! ```
 
+pub mod mdf;
 pub mod psb;
 pub mod value;
-pub mod mdf;
 
 /// PSB file signature (`"PSB"` as a little-endian `u32`).
 pub const PSB_SIGNATURE: u32 = 0x425350;

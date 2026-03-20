@@ -4,6 +4,7 @@ pub mod de;
 pub mod number;
 pub mod ser;
 
+mod impls;
 pub(crate) mod util;
 
 use std::collections::HashMap;
@@ -61,8 +62,8 @@ pub const PSB_COMPILER_BOOL: u8 = 0x85;
 pub const PSB_COMPILER_BINARY_TREE: u8 = 0x86;
 
 /// Variants of psb data type
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, derive_more::From)]
+#[from(forward)]
 pub enum PsbValue {
     /// An empty or null type
     Null,
@@ -71,30 +72,32 @@ pub enum PsbValue {
     /// A numberic value
     Number(PsbNumber),
     /// A string value
-    String(String),
+    String(SmolStr),
 
     /// A resource index
-    Resource(PsbResource),
+    #[from(skip)]
+    Resource(u32),
     /// A extra resource index
-    ExtraResource(PsbExtraResource),
+    #[from(skip)]
+    ExtraResource(u32),
 
     /// List of values
     List(Vec<PsbValue>),
 
-    /// PSB intrinsic type
-    CompilerNumber(PsbCompilerNumber),
-    /// PSB intrinsic type
-    CompilerString(PsbCompilerString),
-    /// PSB intrinsic type
-    CompilerResource(PsbCompilerResource),
-    /// PSB intrinsic type
-    CompilerDecimal(PsbCompilerDecimal),
-    /// PSB intrinsic type
-    CompilerArray(PsbCompilerArray),
-    /// PSB intrinsic type
-    CompilerBool(PsbCompilerBool),
-    /// PSB intrinsic type
-    CompilerBinaryTree(PsbCompilerBinaryTree),
+    /// PSB intrinsic type: [`PsbCompilerNumber`]
+    CompilerNumber,
+    /// PSB intrinsic type: [`PsbCompilerString`]
+    CompilerString,
+    /// PSB intrinsic type: [`PsbCompilerResource`]
+    CompilerResource,
+    /// PSB intrinsic type: [`PsbCompilerDecimal`]
+    CompilerDecimal,
+    /// PSB intrinsic type: [`PsbCompilerArray`]
+    CompilerArray,
+    /// PSB intrinsic type: [`PsbCompilerBool`]
+    CompilerBool,
+    /// PSB intrinsic type: [`PsbCompilerBinaryTree`]
+    CompilerBinaryTree,
 
     /// Map of values
     Object(HashMap<SmolStr, PsbValue>),

@@ -4,8 +4,6 @@ use std::io::Cursor;
 use emote_psb::{
     psb::{read::PsbFile, table::StringTable, write::PsbWriter},
     value::{
-        PsbCompilerArray, PsbCompilerBinaryTree, PsbCompilerBool, PsbCompilerDecimal,
-        PsbCompilerNumber, PsbCompilerResource, PsbCompilerString, PsbExtraResource, PsbResource,
         PsbValue,
         de::Deserializer,
         number::PsbNumber,
@@ -71,7 +69,17 @@ fn psb_bool_false_roundtrip() {
 
 #[test]
 fn psb_integer_roundtrip() {
-    for v in [0i64, 1, -1, 127, -128, 255, -12322, i32::MAX as i64, i32::MIN as i64] {
+    for v in [
+        0i64,
+        1,
+        -1,
+        127,
+        -128,
+        255,
+        -12322,
+        i32::MAX as i64,
+        i32::MIN as i64,
+    ] {
         let val = PsbValue::Number(PsbNumber::Integer(v));
         assert_eq!(psb_roundtrip(&val), val, "failed for integer {v}");
     }
@@ -101,19 +109,19 @@ fn psb_double_roundtrip() {
 
 #[test]
 fn psb_string_roundtrip() {
-    let val = PsbValue::String("hello, world".to_string());
+    let val = PsbValue::String("hello, world".into());
     assert_eq!(psb_roundtrip(&val), val);
 }
 
 #[test]
 fn psb_resource_roundtrip() {
-    let val = PsbValue::Resource(PsbResource(42));
+    let val = PsbValue::Resource(42);
     assert_eq!(psb_roundtrip(&val), val);
 }
 
 #[test]
 fn psb_extra_resource_roundtrip() {
-    let val = PsbValue::ExtraResource(PsbExtraResource(7));
+    let val = PsbValue::ExtraResource(7);
     assert_eq!(psb_roundtrip(&val), val);
 }
 
@@ -143,7 +151,10 @@ fn psb_nested_list_roundtrip() {
 #[test]
 fn psb_object_roundtrip() {
     let mut map = HashMap::new();
-    map.insert(SmolStr::new("alpha"), PsbValue::Number(PsbNumber::Integer(1)));
+    map.insert(
+        SmolStr::new("alpha"),
+        PsbValue::Number(PsbNumber::Integer(1)),
+    );
     map.insert(SmolStr::new("beta"), PsbValue::Bool(false));
     map.insert(SmolStr::new("gamma"), PsbValue::Null);
     let val = PsbValue::Object(map);
@@ -158,7 +169,10 @@ fn psb_nested_object_roundtrip() {
 
     let mut outer = HashMap::new();
     outer.insert(SmolStr::new("nested"), PsbValue::Object(inner));
-    outer.insert(SmolStr::new("count"), PsbValue::Number(PsbNumber::Integer(2)));
+    outer.insert(
+        SmolStr::new("count"),
+        PsbValue::Number(PsbNumber::Integer(2)),
+    );
 
     let val = PsbValue::Object(outer);
     assert_eq!(psb_roundtrip(&val), val);
@@ -166,43 +180,43 @@ fn psb_nested_object_roundtrip() {
 
 #[test]
 fn psb_compiler_number_roundtrip() {
-    let val = PsbValue::CompilerNumber(PsbCompilerNumber);
+    let val = PsbValue::CompilerNumber;
     assert_eq!(psb_roundtrip(&val), val);
 }
 
 #[test]
 fn psb_compiler_string_roundtrip() {
-    let val = PsbValue::CompilerString(PsbCompilerString);
+    let val = PsbValue::CompilerString;
     assert_eq!(psb_roundtrip(&val), val);
 }
 
 #[test]
 fn psb_compiler_resource_roundtrip() {
-    let val = PsbValue::CompilerResource(PsbCompilerResource);
+    let val = PsbValue::CompilerResource;
     assert_eq!(psb_roundtrip(&val), val);
 }
 
 #[test]
 fn psb_compiler_decimal_roundtrip() {
-    let val = PsbValue::CompilerDecimal(PsbCompilerDecimal);
+    let val = PsbValue::CompilerDecimal;
     assert_eq!(psb_roundtrip(&val), val);
 }
 
 #[test]
 fn psb_compiler_array_roundtrip() {
-    let val = PsbValue::CompilerArray(PsbCompilerArray);
+    let val = PsbValue::CompilerArray;
     assert_eq!(psb_roundtrip(&val), val);
 }
 
 #[test]
 fn psb_compiler_bool_roundtrip() {
-    let val = PsbValue::CompilerBool(PsbCompilerBool);
+    let val = PsbValue::CompilerBool;
     assert_eq!(psb_roundtrip(&val), val);
 }
 
 #[test]
 fn psb_compiler_binary_tree_roundtrip() {
-    let val = PsbValue::CompilerBinaryTree(PsbCompilerBinaryTree);
+    let val = PsbValue::CompilerBinaryTree;
     assert_eq!(psb_roundtrip(&val), val);
 }
 
@@ -272,19 +286,19 @@ fn serde_double() {
 
 #[test]
 fn serde_string() {
-    let val = PsbValue::String("test string".to_string());
+    let val = PsbValue::String("test string".into());
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_resource() {
-    let val = PsbValue::Resource(PsbResource(42));
+    let val = PsbValue::Resource(42);
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_extra_resource() {
-    let val = PsbValue::ExtraResource(PsbExtraResource(7));
+    let val = PsbValue::ExtraResource(7);
     assert_eq!(serde_roundtrip(&val), val);
 }
 
@@ -300,51 +314,57 @@ fn serde_list() {
 #[test]
 fn serde_object() {
     let mut map = HashMap::new();
-    map.insert(SmolStr::new("key1"), PsbValue::Number(PsbNumber::Integer(1)));
-    map.insert(SmolStr::new("key2"), PsbValue::Number(PsbNumber::Integer(2)));
+    map.insert(
+        SmolStr::new("key1"),
+        PsbValue::Number(PsbNumber::Integer(1)),
+    );
+    map.insert(
+        SmolStr::new("key2"),
+        PsbValue::Number(PsbNumber::Integer(2)),
+    );
     let val = PsbValue::Object(map);
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_compiler_number() {
-    let val = PsbValue::CompilerNumber(PsbCompilerNumber);
+    let val = PsbValue::CompilerNumber;
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_compiler_string() {
-    let val = PsbValue::CompilerString(PsbCompilerString);
+    let val = PsbValue::CompilerString;
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_compiler_resource() {
-    let val = PsbValue::CompilerResource(PsbCompilerResource);
+    let val = PsbValue::CompilerResource;
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_compiler_decimal() {
-    let val = PsbValue::CompilerDecimal(PsbCompilerDecimal);
+    let val = PsbValue::CompilerDecimal;
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_compiler_array() {
-    let val = PsbValue::CompilerArray(PsbCompilerArray);
+    let val = PsbValue::CompilerArray;
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_compiler_bool() {
-    let val = PsbValue::CompilerBool(PsbCompilerBool);
+    let val = PsbValue::CompilerBool;
     assert_eq!(serde_roundtrip(&val), val);
 }
 
 #[test]
 fn serde_compiler_binary_tree() {
-    let val = PsbValue::CompilerBinaryTree(PsbCompilerBinaryTree);
+    let val = PsbValue::CompilerBinaryTree;
     assert_eq!(serde_roundtrip(&val), val);
 }
 
@@ -436,7 +456,10 @@ fn object_many_keys_sorted_and_preserved() {
     let keys = ["omega", "beta", "delta", "alpha", "gamma", "epsilon"];
     let mut map = HashMap::new();
     for (i, k) in keys.iter().enumerate() {
-        map.insert(SmolStr::new(*k), PsbValue::Number(PsbNumber::Integer(i as i64)));
+        map.insert(
+            SmolStr::new(*k),
+            PsbValue::Number(PsbNumber::Integer(i as i64)),
+        );
     }
 
     let val = PsbValue::Object(map.clone());
